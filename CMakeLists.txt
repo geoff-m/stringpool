@@ -5,7 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_library(stringpool STATIC
         src/stringpool.cpp
-        include/stringpool/stringpool.h)
+        include/stringpool/stringpool.h
+        src/include/hash.h
+        src/hash.cpp)
 
 target_include_directories(stringpool PUBLIC include)
 

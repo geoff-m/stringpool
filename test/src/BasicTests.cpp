@@ -7,11 +7,29 @@ TEST(Basic, Create) {
     pool p;
 }
 
+void expectEqual(const string_handle interned, const char* str) {
+    const auto len = strlen(str);
+    EXPECT_TRUE(interned.equals(str, len));
+    EXPECT_TRUE(interned.equals(str));
+    //EXPECT_EQ(0, interned.strcmp(str));
+    //EXPECT_EQ(0, interned.memcmp(str, len));
+}
+
+void expectEqual(const string_handle x, const string_handle y) {
+    EXPECT_TRUE(x.equals(y));
+    EXPECT_TRUE(y.equals(x));
+    //EXPECT_EQ(0, x.strcmp(y));
+    //EXPECT_EQ(0, y.strcmp(x));
+    //EXPECT_EQ(0, x.memcmp(y));
+    //EXPECT_EQ(0, y.memcmp(x));
+}
+
+
 TEST(Basic, Add) {
     pool p;
     const auto string = "hello";
     const auto interned = p.intern(string);
-    EXPECT_TRUE(interned.equals(string, strlen(string)));
+    expectEqual(interned, string);
 }
 
 TEST(Basic, Dedup) {
@@ -19,8 +37,70 @@ TEST(Basic, Dedup) {
     const auto string = "hello";
     const auto interned1 = p.intern(string);
     const auto interned2 = p.intern(string);
-    EXPECT_TRUE(interned1.equals(string, strlen(string)));
-    EXPECT_TRUE(interned2.equals(string, strlen(string)));
-    EXPECT_TRUE(interned1.equals(interned2));
-    EXPECT_TRUE(interned2.equals(interned1));
+    expectEqual(interned1, interned2);
+    expectEqual(interned1, string);
+}
+
+TEST(Basic, Empty) {
+    pool p;
+    const auto string = "";
+    const auto interned = p.intern(string);
+    expectEqual(interned, string);
+}
+
+TEST(Basic, DedupEmpty) {
+    pool p;
+    const auto string = "";
+    const auto interned = p.intern(string);
+    expectEqual(interned, string);
+}
+
+TEST(Basic, Concat1Plus1) {
+    pool p;
+    auto ia = p.intern("a");
+    auto ib = p.intern("b");
+    auto iab = p.concat(ia, ib);
+    expectEqual(iab, "ab");
+}
+
+TEST(Basic, Concat8Plus8) {
+    pool p;
+    auto ia = p.intern("aaaaaaaa");
+    auto ib = p.intern("bbbbbbbb");
+    auto iab = p.concat(ia, ib);
+    expectEqual(iab, "aaaaaaaabbbbbbbb");
+}
+
+TEST(Basic, Concat9Plus9) {
+    pool p;
+    auto ia = p.intern("aaaaaaaaa");
+    auto ib = p.intern("bbbbbbbbb");
+    auto iab = p.concat(ia, ib);
+    expectEqual(iab, "aaaaaaaaabbbbbbbbb");
+}
+
+TEST(Basic, Concat0Plus9) {
+    pool p;
+    auto ia = p.intern("");
+    auto ib = p.intern("bbbbbbbbb");
+    auto iab = p.concat(ia, ib);
+    expectEqual(iab, "bbbbbbbbb");
+}
+
+TEST(Basic, Concat9Plus0) {
+    pool p;
+    auto ia = p.intern("aaaaaaaaa");
+    auto ib = p.intern("");
+    auto iab = p.concat(ia, ib);
+    expectEqual(iab, "aaaaaaaaa");
+}
+
+TEST(Basic, Concat0Plus0) {
+    pool p;
+    auto ia = p.intern("");
+    auto ib = p.intern("");
+    auto iab = p.concat(ia, ib);
+    expectEqual(iab, "");
+    expectEqual(iab, ia);
+    expectEqual(iab, ib);
 }

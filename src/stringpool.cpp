@@ -1,40 +1,48 @@
+// todo: can't have parent pointers,
+// because we want to allow things to have multiple parents.
+// therefore we have to use temporary stacks for walking trees.
+// on the bright side, we don't have to store parent pointers.
 #include "stringpool/stringpool.h"
+#include "include/hash.h"
 #include <atomic>
 #include <cassert>
 #include <cstring>
-#include "xxhash.h"
 #include <cstdlib>
 
 using namespace stringpool;
 
 enum class EntryType : uint8_t {
-    LEFT_SHORT_STRING = 0, // embedded in concat
-    RIGHT_SHORT_STRING = 1, // embedded in concat
-    ATOM = 2,
-    CONCAT_LEFT_ENTRY_RIGHT_SHORT = 3, // todo: i think we can consolidate these down to just 1 concat node type.
-    CONCAT_LEFT_SHORT_RIGHT_ENTRY = 4,
-    CONCAT_LEFT_SHORT_RIGHT_SHORT = 5,
-    CONCAT_LEFT_ENTRY_RIGHT_ENTRY = 6,
+    ATOM = 0,
+    CONCAT_LEFT_ENTRY_RIGHT_ENTRY = 1,
+    CONCAT_LEFT_ENTRY_RIGHT_SHORT = 2,
+    CONCAT_LEFT_SHORT_RIGHT_ENTRY = 3,
+    CONCAT_LEFT_SHORT_RIGHT_SHORT = 4
 };
 
-constexpr uint64_t LOWER_7_MASK = 0x00ffffffffffffff;
+constexpr uint64_t UPPER_7_MASK = 0xffffffffffffff00;
+constexpr uint64_t UPPER_1_MASK = 0xff00000000000000;
+
+// Minimum size of an atom entry.
+constexpr uint64_t ATOM_ENTRY_SIZE = 8;
+
+// Size of a concat entry.
+constexpr uint64_t CONCAT_ENTRY_SIZE = 8 * 3;
 
 namespace offsets {
     constexpr int ENTRY_TYPE_STRING_LENGTH = 0;
-    constexpr int PARENT_PTR = 8;
 
     namespace atom {
-        constexpr int STRING_VALUE = 16;
+        constexpr int STRING_VALUE = 8;
     }
 
     namespace concat {
-        constexpr int LEFT_PTR = 16;
-        constexpr int RIGHT_PTR = 24;
+        constexpr int LEFT_PTR = 8;
+        constexpr int RIGHT_PTR = 16;
     }
 }
 
 string_handle::string_handle(pool& owner, char* data)
-    : owner(owner), data(data) {
+    : owner(owner), entry(data) {
 }
 
 [[nodiscard]] size_t min(const size_t x, const size_t y) {
@@ -44,111 +52,66 @@ string_handle::string_handle(pool& owner, char* data)
 string_handle::tree_walker::tree_walker(char* root)
     : root(root),
       lastLeaf(nullptr) {
+    toVisit.emplace_back(root);
 }
 
 [[nodiscard]] EntryType unpack_node_type(const char* node) {
     return static_cast<EntryType>(node[offsets::ENTRY_TYPE_STRING_LENGTH] & 0b111);
 }
 
-[[nodiscard]] bool isInternalNode(const char* node) {
-    return unpack_node_type(node) >= EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT;
+[[nodiscard]] bool isConcat(const char* node) {
+    return unpack_node_type(node) != EntryType::ATOM;
 }
 
-[[nodiscard]] bool isShortString(const char* node) {
-    return unpack_node_type(node) < EntryType::ATOM;
+[[nodiscard]] bool isShortConcatChild(const char* node) {
+    return unpack_node_type(node) > EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY;
 }
 
 [[nodiscard]] size_t unpackLength(const char* node) {
-    if (isShortString(node))
-        return node[offsets::ENTRY_TYPE_STRING_LENGTH] >> 3;
-    return reinterpret_cast<const uint64_t*>(node)[offsets::ENTRY_TYPE_STRING_LENGTH] & LOWER_7_MASK;
+    if (isShortConcatChild(node))
+        return node[offsets::ENTRY_TYPE_STRING_LENGTH] >> 4;
+    const auto ret = reinterpret_cast<const uint64_t*>(node)[offsets::ENTRY_TYPE_STRING_LENGTH] >> 8;
+    return ret;
 }
 
 [[nodiscard]] char* unpackStringFromLeaf(char* node) {
-    if (isShortString(node))
+    if (isShortConcatChild(node))
         return node + 1;
     assert(unpack_node_type(node) == EntryType::ATOM);
-    return reinterpret_cast<char*>(node[offsets::atom::STRING_VALUE]);
+    return node + offsets::atom::STRING_VALUE;
 }
 
-[[nodiscard]] char* unpackLeftChild(const char* concatNode) {
-    return reinterpret_cast<char*>(concatNode[offsets::concat::LEFT_PTR]);
+[[nodiscard]] char* unpackLeftChild(char* concatNode) {
+    auto* child = concatNode + offsets::concat::LEFT_PTR;
+    const auto type = unpack_node_type(concatNode);
+    if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT || type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY)
+        return *reinterpret_cast<char**>(child);
+    return concatNode + offsets::concat::LEFT_PTR;
 }
 
-[[nodiscard]] char* unpackRightChild(const char* concatNode) {
-    return reinterpret_cast<char*>(concatNode[offsets::concat::RIGHT_PTR]);
-}
-
-[[nodiscard]] char* unpackParent(char* node, bool& isLeftChild) {
-    const auto nodeType = unpack_node_type(node);
-    switch (nodeType) {
-        case EntryType::LEFT_SHORT_STRING:
-            isLeftChild = true;
-            return node - offsets::concat::LEFT_PTR;
-        case EntryType::RIGHT_SHORT_STRING:
-            isLeftChild = false;
-            return node - offsets::concat::RIGHT_PTR;
-        default:
-            auto* parent = reinterpret_cast<char*>(node[offsets::PARENT_PTR]);
-            if (parent != nullptr) {
-                isLeftChild = unpackLeftChild(parent) == node;
-                assert(isLeftChild != (unpackRightChild(parent) == node));
-            }
-            return parent;
-    }
-}
-
-char* find_next_unvisited_leaf(char* lastVisitedLeaf) {
-    bool wasLeftChild;
-    auto* parent = unpackParent(lastVisitedLeaf, wasLeftChild);
-    if (parent == nullptr)
-        return nullptr;
-    if (wasLeftChild) {
-        // Last visited leaf was left child.
-        // Visit leftmost right child of parent.
-        auto* next = unpackRightChild(parent);
-        while (isInternalNode(next)) {
-            next = unpackLeftChild(next);
-        }
-        return next;
-    } else {
-        // Last visited leaf was right child.
-        // Visit leftmost child to the right of grandparent.
-        auto* next = unpackParent(parent, wasLeftChild);
-        while (next && !wasLeftChild) {
-            next = unpackParent(parent, wasLeftChild);
-        }
-        return next;
-    }
+[[nodiscard]] char* unpackRightChild(char* concatNode) {
+    auto* child = concatNode + offsets::concat::RIGHT_PTR;
+    const auto type = unpack_node_type(concatNode);
+    if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY || type == EntryType::CONCAT_LEFT_SHORT_RIGHT_ENTRY)
+        return *reinterpret_cast<char**>(child);
+    return concatNode + offsets::concat::RIGHT_PTR;
 }
 
 size_t string_handle::tree_walker::get_next_bytes(char** bytes) {
-    // Find next unvisited leaf starting from 'last'.
-    if (lastLeaf == nullptr) {
-        if (isInternalNode(root)) {
-            auto* leftmost = unpackLeftChild(root);
-            while (isInternalNode(leftmost))
-                leftmost = unpackLeftChild(root);
-            lastLeaf = leftmost;
-            *bytes = lastLeaf + offsets::atom::STRING_VALUE;
-        } else {
-            // Root is an atom.
-            lastLeaf = root;
-            *bytes = lastLeaf + offsets::atom::STRING_VALUE;
-            return lastLeaf[offsets::ENTRY_TYPE_STRING_LENGTH] & LOWER_7_MASK;
-        }
-    }
-    auto* next = find_next_unvisited_leaf(lastLeaf);
-    if (next == nullptr) {
+    if (toVisit.empty())
         return 0;
+    auto* current = toVisit.back();
+    toVisit.pop_back();
+    while (isConcat(current)) {
+        toVisit.emplace_back(unpackRightChild(current));
+        current = unpackLeftChild(current);
     }
-    lastLeaf = next;
-    *bytes = unpackStringFromLeaf(lastLeaf);
-    return lastLeaf[offsets::ENTRY_TYPE_STRING_LENGTH] & LOWER_7_MASK;
+    *bytes = unpackStringFromLeaf(current);
+    return unpackLength(current);
 }
 
 size_t string_handle::copy(char* destination, size_t destination_size) const {
-    tree_walker walker(data);
+    tree_walker walker(entry);
     size_t totalLength = 0;
     char* piece;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
@@ -158,9 +121,27 @@ size_t string_handle::copy(char* destination, size_t destination_size) const {
     return totalLength;
 }
 
+size_t string_handle::hash() const {
+    hasher h;
+    tree_walker walker(entry);
+    char* piece;
+    while (size_t pieceLength = walker.get_next_bytes(&piece)) {
+        h.add(piece, pieceLength);
+    }
+    return h.finish();
+}
+
+void string_handle::visit_pieces(void (*callback)(char* piece, size_t pieceSize, void* state), void* state) const {
+    tree_walker w(entry);
+    char* piece;
+    while (size_t pieceLength = w.get_next_bytes(&piece)) {
+        callback(piece, pieceLength, state);
+    }
+}
+
 // Assumes rhs is null-terminated.
 int string_handle::strcmp(const char* rhs) const {
-    tree_walker walker(data);
+    tree_walker walker(entry);
     char* piece;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
         const auto thisResult = std::strncmp(piece, rhs, pieceLength);
@@ -170,8 +151,56 @@ int string_handle::strcmp(const char* rhs) const {
     return 0;
 }
 
+bool string_handle::equal_entry(char* rhsEntry, size_t length) const {
+    if (entry == rhsEntry)
+        return true;
+    if (length == 0)
+        return true;
+    tree_walker leftWalker(entry);
+    tree_walker rightWalker(rhsEntry);
+    char* leftPiece;
+    char* rightPiece;
+    size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
+    size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+    if (leftPieceLength <= length) {
+        if (rightPieceLength != leftPieceLength)
+            return false;
+    }
+    if (rightPieceLength <= length) {
+        if (rightPieceLength != leftPieceLength)
+            return false;
+    }
+    size_t leftPieceIndex = 0;
+    size_t rightPieceIndex = 0;
+    size_t comparedChars = 0;
+    while (true) {
+        if (leftPieceLength == 0 || rightPieceLength == 0)
+            return false;
+        const auto thisLength = min(leftPieceLength, rightPieceLength);
+        const auto thisResult = std::memcmp(
+            leftPiece + leftPieceIndex,
+            rightPiece + rightPieceIndex,
+            thisLength);
+        if (thisResult != 0)
+            return false;
+        if (comparedChars >= length)
+            return true;
+        comparedChars += thisLength;
+        leftPieceIndex += thisLength;
+        rightPieceIndex += thisLength;
+        if (leftPieceLength == leftPieceLength - 1)
+            leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
+        if (rightPieceIndex == rightPieceLength - 1)
+            rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+    }
+}
+
+int string_handle::memcmp(const string_handle& rhs) const {
+    return equal_entry(rhs.entry, unpackLength(entry));
+}
+
 int string_handle::memcmp(const char* rhs, size_t rhsLength) const {
-    tree_walker walker(data);
+    tree_walker walker(entry);
     char* piece;
     size_t i = 0;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
@@ -188,14 +217,17 @@ bool string_handle::equals(const char* rhs, size_t length) const {
     return 0 == memcmp(rhs, length);
 }
 
+bool string_handle::equals(const char* rhs) const {
+    return equals(rhs, strlen(rhs));
+}
+
 bool string_handle::equals(const string_handle& rhs) const {
     if (this == &rhs)
         return true;
-    tree_walker leftWalker(data);
-    tree_walker rightWalker(rhs.data);
+    tree_walker leftWalker(entry);
+    tree_walker rightWalker(rhs.entry);
     char* leftPiece;
     char* rightPiece;
-    size_t i = 0;
     size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
     size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
     if (leftPieceLength != rightPieceLength)
@@ -204,7 +236,7 @@ bool string_handle::equals(const string_handle& rhs) const {
     size_t rightPieceIndex = 0;
     while (true) {
         if (leftPieceLength == 0 || rightPieceLength == 0)
-            return false;
+            return leftPieceLength == 0 && rightPieceLength == 0;
         const auto thisLength = min(leftPieceLength, rightPieceLength);
         const auto thisResult = std::memcmp(
             leftPiece + leftPieceIndex,
@@ -212,12 +244,11 @@ bool string_handle::equals(const string_handle& rhs) const {
             thisLength);
         if (thisResult != 0)
             return thisResult;
-        i += thisLength;
         leftPieceIndex += thisLength;
         rightPieceIndex += thisLength;
-        if (leftPieceLength == leftPieceLength - 1)
+        if (leftPieceIndex == leftPieceLength)
             leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
-        if (rightPieceIndex == rightPieceLength - 1)
+        if (rightPieceIndex == rightPieceLength)
             rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
     }
 }
@@ -266,20 +297,13 @@ pool::~pool() {
     std::free(table);
 }
 
-[[nodiscard]] size_t hash(const char* string, size_t length) {
-    return XXH64(string, length, 0x7448652047614D65);
-}
-
-[[nodiscard]] size_t hash(const char* string) {
-    return hash(string, strlen(string));
-}
 
 string_handle pool::intern(const char* string) {
     return intern(string, strlen(string));
 }
 
 string_handle pool::intern(const char* string, size_t size) {
-    const auto h = hash(string, size);
+    const auto h = hasher::hash(string, size);
     const auto indexMask = tableCapacity - 1;
     auto index = static_cast<size_t>(h & indexMask);
     table_lock lock(*this);
@@ -297,23 +321,150 @@ string_handle pool::intern(const char* string, size_t size) {
 
     // entry == 0, so no existing entry has this hash.
     // Make copy and insert.
-    char* atom = addAtom(string, size, nullptr);
+    char* atom = addAtom(string, size);
     table[index] = atom;
     return string_handle(*this, atom);
 }
 
 
-char* pool::addAtom(const char* string, size_t size, const char* parent) {
+char* pool::addAtom(const char* string, size_t size) {
     updateTableSize(tableSize + 1);
     const auto blockSize = 16 + size;
     updateDataSize(dataSize + blockSize);
-    assert(size == (size & LOWER_7_MASK)); // todo: replace this assert with some nicer failure mechanism
+    assert(size == (size & ~UPPER_1_MASK)); // todo: replace this assert with some nicer failure mechanism
     char* startOfAtom = data + dataSize - blockSize;
     startOfAtom[0] = static_cast<char>(EntryType::ATOM);
     std::memcpy(startOfAtom + 1, &size, 7);
-    std::memcpy(startOfAtom + 8, &parent, sizeof(parent));
-    std::memcpy(startOfAtom + 16, string, size);
+    std::memcpy(startOfAtom + offsets::atom::STRING_VALUE, string, size);
     return startOfAtom;
+}
+
+bool string_handle::concat_equals(char* entry, string_handle left, string_handle right) {
+    const auto entryLength = unpackLength(entry);
+    const auto leftLength = unpackLength(left.entry);
+    const auto rightLength = unpackLength(right.entry);
+    if (entryLength != leftLength + rightLength)
+        return false;
+
+    tree_walker entryWalker(entry);
+    tree_walker comparandWalker(left.entry);
+    bool onLeft = true;
+    char* entryPiece;
+    char* comparandPiece;
+    size_t comparedLength = 0;
+    size_t entryPieceLength = entryWalker.get_next_bytes(&entryPiece);
+    size_t comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
+    if (entryPieceLength != comparandPieceLength)
+        return false; // Root pieces must be of equal lengths.
+    size_t entryPieceIndex = 0;
+    size_t comparandPieceIndex = 0;
+    while (true) {
+        if (entryPieceLength == 0 || comparandPieceLength == 0)
+            return comparedLength == entryPieceIndex;
+        const auto thisLength = min(entryPieceLength, comparandPieceLength);
+        const auto thisResult = std::memcmp(
+            entryPiece + entryPieceIndex,
+            comparandPiece + comparandPieceIndex,
+            thisLength);
+        if (thisResult != 0)
+            return thisResult;
+        comparedLength += thisLength;
+        entryPieceIndex += thisLength;
+        comparandPieceIndex += thisLength;
+        if (entryPieceLength == entryPieceLength - 1) {
+            entryPieceLength = entryWalker.get_next_bytes(&entryPiece);
+            entryPieceIndex = 0;
+        }
+        if (comparandPieceIndex == comparandPieceLength - 1) {
+            comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
+            if (comparandPieceLength == 0 && onLeft) {
+                onLeft = false;
+                comparandWalker = tree_walker(right.entry);
+                comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
+            }
+            comparandPieceIndex = 0;
+        }
+    }
+}
+
+void addToHash(char* piece, size_t size, void* pHasher) {
+    static_cast<hasher*>(pHasher)->add(piece, size);
+}
+
+[[nodiscard]] EntryType makeConcatType(bool leftIsShort, bool rightIsShort) {
+    if (!leftIsShort && !rightIsShort)
+        return EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY;
+    if (leftIsShort && !rightIsShort)
+        return EntryType::CONCAT_LEFT_SHORT_RIGHT_ENTRY;
+    if (!leftIsShort && rightIsShort)
+        return EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT;
+    if (leftIsShort && rightIsShort)
+        return EntryType::CONCAT_LEFT_SHORT_RIGHT_SHORT;
+}
+
+string_handle pool::concat(string_handle left, string_handle right) {
+    hasher h;
+    left.visit_pieces(addToHash, &h);
+    right.visit_pieces(addToHash, &h);
+    const auto hash = h.finish();
+    const auto indexMask = tableCapacity - 1;
+    auto index = static_cast<size_t>(hash & indexMask);
+    table_lock lock(*this);
+    char* entry;
+    for (entry = table[index]; entry != 0; index = (index + 1) & indexMask) {
+        // Possible collision. Check for data equality.
+        if (string_handle::concat_equals(entry, left, right)) {
+            // Found identical string already in table.
+            return string_handle(*this, entry);
+        }
+
+        // Load from next index.
+        entry = table[index];
+    }
+
+    // entry == 0, so no existing entry has this hash.
+    const auto leftLength = unpackLength(left.entry);
+    const auto rightLength = unpackLength(right.entry);
+    const auto totalLength = leftLength + rightLength;
+    if (totalLength <= CONCAT_ENTRY_SIZE - ATOM_ENTRY_SIZE) {
+        // We will store the concatenation as a single atom node.
+        updateTableSize(tableSize + 1);
+        const auto blockSize = ATOM_ENTRY_SIZE + totalLength;
+        updateDataSize(dataSize + blockSize);
+        char* startOfAtom = data + dataSize - blockSize;
+        startOfAtom[0] = static_cast<char>(EntryType::ATOM);
+        std::memcpy(startOfAtom + 1, &totalLength, 7);
+        left.copy(startOfAtom + offsets::atom::STRING_VALUE, leftLength);
+        right.copy(startOfAtom + offsets::atom::STRING_VALUE + leftLength, rightLength);
+        table[index] = startOfAtom;
+        return string_handle(*this, startOfAtom);
+    } else {
+        // We will store the concatenation as a concat node.
+        // We should never have both short in a concat,
+        // since if we could, we'd just make it an atom instead of a concat.
+        updateTableSize(tableSize + 1);
+        const auto blockSize = CONCAT_ENTRY_SIZE;
+        updateDataSize(dataSize + blockSize);
+        char* startOfConcat = data + dataSize - blockSize;
+        const auto leftIsShort = leftLength <= 7;
+        const auto rightIsShort = rightLength <= 7;
+        startOfConcat[0] = static_cast<char>(makeConcatType(leftIsShort, rightIsShort));
+        std::memcpy(startOfConcat + 1, &totalLength, 7);
+        if (leftIsShort) {
+            startOfConcat[offsets::concat::LEFT_PTR] = static_cast<char>(leftLength);
+            left.copy(startOfConcat + offsets::concat::LEFT_PTR + 1, 7);
+        } else {
+            std::memcpy(startOfConcat + offsets::concat::LEFT_PTR, &left.entry, 8);
+        }
+        if (rightIsShort) {
+            startOfConcat[offsets::concat::RIGHT_PTR] = static_cast<char>(rightLength);
+            right.copy(startOfConcat + offsets::concat::RIGHT_PTR + 1, 7);
+        } else {
+            std::memcpy(startOfConcat + offsets::concat::RIGHT_PTR, &right.entry, 8);
+        }
+        table[index] = startOfConcat;
+        return string_handle(*this, startOfConcat);
+    }
 }
 
 bool pool::equals(const char* string, size_t size, const char* entry) {

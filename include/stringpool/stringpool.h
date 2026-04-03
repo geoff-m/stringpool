@@ -1,5 +1,6 @@
 #pragma once
 #include <cstddef>
+#include <deque>
 
 namespace stringpool {
     struct allocator {
@@ -15,19 +16,29 @@ namespace stringpool {
     class string_handle {
         friend class pool;
         pool& owner;
-        char* data;
+        char* entry;
 
         string_handle(pool& owner, char* data);
+
+        [[nodiscard]] size_t hash() const;
+
+        void visit_pieces(void (*callback)(char* piece, size_t pieceSize, void* state), void* state) const;
 
         class tree_walker {
             char* root;
             char* lastLeaf;
+            std::deque<char*> toVisit;
 
         public:
             explicit tree_walker(char* root);
 
             [[nodiscard]] size_t get_next_bytes(char** bytes);
         };
+
+        // Gets whether this string is equal to the given one, considering only the first 'length' chars.
+        [[nodiscard]] bool equal_entry(char* rhsEntry, size_t length) const;
+
+        [[nodiscard]] static bool concat_equals(char* entry, string_handle left, string_handle right);
 
     public:
         size_t copy(char* destination, size_t size) const;
@@ -70,6 +81,14 @@ namespace stringpool {
          */
         [[nodiscard]] bool equals(const char* rhs, size_t length) const;
 
+
+        /**
+         * Compares this string with the given one.
+         * @param rhs The null-terminated string to compare to this one.
+         * @return True if and only if the strings are equal.
+         */
+        [[nodiscard]] bool equals(const char* rhs) const;
+
         /**
          * Compares this string with the given one.
          * @param rhs The string to compare to this one.
@@ -108,7 +127,7 @@ namespace stringpool {
         void updateDataSize(size_t newSize);
 
         // These functions are not thread-safe.
-        char* addAtom(const char* string, size_t size, const char* parent);
+        char* addAtom(const char* string, size_t size);
 
         [[nodiscard]] static bool equals(const char* string, size_t size, const char* entry);
 
@@ -123,8 +142,6 @@ namespace stringpool {
 
         string_handle intern(const char* string, size_t size);
 
-        string_handle intern_concat(const char* left, const char* right);
-
-        string_handle intern_concat(const char* left, size_t leftSize, const char* right, size_t rightSize);
+        string_handle concat(string_handle left, string_handle right);
     };
 }
