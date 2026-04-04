@@ -40,6 +40,9 @@ namespace stringpool {
         [[nodiscard]] static bool concat_equals(char* entry, string_handle left, string_handle right);
 
     public:
+        [[nodiscard]] size_t size() const;
+        [[nodiscard]] size_t length() const;
+
         size_t copy(char* destination, size_t size) const;
 
         /**

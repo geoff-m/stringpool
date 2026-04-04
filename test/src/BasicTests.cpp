@@ -11,17 +11,17 @@ void expectEqual(const string_handle interned, const char* str) {
     const auto len = strlen(str);
     EXPECT_TRUE(interned.equals(str, len));
     EXPECT_TRUE(interned.equals(str));
-    //EXPECT_EQ(0, interned.strcmp(str));
-    //EXPECT_EQ(0, interned.memcmp(str, len));
+    EXPECT_EQ(0, interned.strcmp(str));
+    EXPECT_EQ(0, interned.memcmp(str, len));
 }
 
 void expectEqual(const string_handle x, const string_handle y) {
     EXPECT_TRUE(x.equals(y));
     EXPECT_TRUE(y.equals(x));
-    //EXPECT_EQ(0, x.strcmp(y));
-    //EXPECT_EQ(0, y.strcmp(x));
-    //EXPECT_EQ(0, x.memcmp(y));
-    //EXPECT_EQ(0, y.memcmp(x));
+    EXPECT_EQ(0, x.strcmp(y));
+    EXPECT_EQ(0, y.strcmp(x));
+    EXPECT_EQ(0, x.memcmp(y, x.size()));
+    EXPECT_EQ(0, y.memcmp(x, y.size()));
 }
 
 

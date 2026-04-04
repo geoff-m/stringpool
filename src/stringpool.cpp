@@ -154,10 +154,12 @@ void string_handle::visit_pieces(void (*callback)(char* piece, size_t pieceSize,
 int string_handle::strcmp(const char* rhs) const {
     tree_walker walker(entry);
     char* piece;
+    size_t comparedChars = 0;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
-        const auto thisResult = std::strncmp(piece, rhs, pieceLength);
+        const auto thisResult = std::strncmp(piece, rhs + comparedChars, pieceLength);
         if (thisResult != 0)
             return thisResult;
+        comparedChars += pieceLength;
     }
     return 0;
 }
@@ -470,6 +472,14 @@ bool string_handle::concat_equals(char* entry, string_handle left, string_handle
             comparandPieceIndex = 0;
         }
     }
+}
+
+size_t string_handle::size() const {
+    return unpackLength(entry);
+}
+
+size_t string_handle::length() const {
+    return size();
 }
 
 void addToHash(char* piece, size_t size, void* pHasher) {
