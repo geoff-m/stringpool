@@ -131,8 +131,6 @@ namespace stringpool {
         // These functions are not thread-safe.
         char* addAtom(const char* string, size_t size);
 
-        [[nodiscard]] static bool equals(const char* string, size_t size, const char* entry);
-
     public:
         pool(size_t initial_table_capacity, size_t initial_data_capacity);
 

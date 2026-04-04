@@ -397,9 +397,10 @@ string_handle pool::intern(const char* string, size_t size) {
     char* entry;
     for (entry = table[index]; entry != 0; index = (index + 1) & indexMask) {
         // Possible collision. Check for data equality.
-        if (equals(string, size, entry)) {
+        string_handle handle(*this, entry);
+        if (handle.equals(string, size)) {
             // Found identical string already in table.
-            return string_handle(*this, entry);
+            return handle;
         }
 
         // Load from next index.
@@ -561,15 +562,5 @@ string_handle pool::concat(string_handle left, string_handle right) {
         }
         table[index] = startOfConcat;
         return string_handle(*this, startOfConcat);
-    }
-}
-
-bool pool::equals(const char* string, size_t size, const char* entry) {
-    const auto entryType = static_cast<EntryType>(entry[0]);
-    if (entryType == EntryType::ATOM) {
-        return 0 == std::memcmp(string, entry + 8, size);
-    } else {
-        // todo: handle other entry types.
-        return false;
     }
 }
