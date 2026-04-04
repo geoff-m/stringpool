@@ -104,3 +104,51 @@ TEST(Basic, Concat0Plus0) {
     expectEqual(iab, ia);
     expectEqual(iab, ib);
 }
+
+TEST(Basic, CopyConcatShortLong) {
+    pool p;
+    auto a = p.concat(
+        p.intern("a"),
+        p.intern("leaf0123456789"));
+    constexpr auto len = 64;
+    char buf[len] = {};
+    a.copy(buf, len);
+    EXPECT_STREQ("aleaf0123456789", buf);
+}
+
+TEST(Basic, CopyConcatLongLong) {
+    pool p;
+    auto a = p.concat(
+        p.intern("leaf0123456789"),
+        p.intern("leaf9876543210"));
+    constexpr auto len = 64;
+    char buf[len] = {};
+    a.copy(buf, len);
+    EXPECT_STREQ("leaf0123456789leaf9876543210", buf);
+}
+
+TEST(Basic, CopyConcatAtomConcatLongLong) {
+    pool p;
+    auto a = p.concat(
+    p.intern("a"),
+    p.concat(
+        p.intern("leaf0123456789"),
+        p.intern("leaf9876543210")));
+    constexpr auto len = 64;
+    char buf[len] = {};
+    a.copy(buf, len);
+    EXPECT_STREQ("aleaf0123456789leaf9876543210", buf);
+}
+
+TEST(Basic, CopyConcatConcatLongLongAtom) {
+    pool p;
+    auto a = p.concat(
+        p.concat(
+        p.intern("leaf0123456789"),
+        p.intern("leaf9876543210")),
+        p.intern("a"));
+    constexpr auto len = 64;
+    char buf[len] = {};
+    a.copy(buf, len);
+    EXPECT_STREQ("leaf0123456789leaf9876543210a", buf);
+}

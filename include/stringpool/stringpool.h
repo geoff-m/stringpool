@@ -26,7 +26,6 @@ namespace stringpool {
 
         class tree_walker {
             char* root;
-            char* lastLeaf;
             std::deque<char*> toVisit;
 
         public:

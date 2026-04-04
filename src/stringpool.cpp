@@ -13,10 +13,11 @@ using namespace stringpool;
 
 enum class EntryType : uint8_t {
     ATOM = 0,
-    CONCAT_LEFT_ENTRY_RIGHT_ENTRY = 1,
-    CONCAT_LEFT_ENTRY_RIGHT_SHORT = 2,
-    CONCAT_LEFT_SHORT_RIGHT_ENTRY = 3,
-    CONCAT_LEFT_SHORT_RIGHT_SHORT = 4
+    SHORT_STRING = 1,
+    CONCAT_LEFT_ENTRY_RIGHT_ENTRY = 2,
+    CONCAT_LEFT_ENTRY_RIGHT_SHORT = 3,
+    CONCAT_LEFT_SHORT_RIGHT_ENTRY = 4,
+    CONCAT_LEFT_SHORT_RIGHT_SHORT = 5,
 };
 
 constexpr uint64_t UPPER_7_MASK = 0xffffffffffffff00;
@@ -50,8 +51,7 @@ string_handle::string_handle(pool& owner, char* data)
 }
 
 string_handle::tree_walker::tree_walker(char* root)
-    : root(root),
-      lastLeaf(nullptr) {
+    : root(root) {
     toVisit.emplace_back(root);
 }
 
@@ -60,11 +60,12 @@ string_handle::tree_walker::tree_walker(char* root)
 }
 
 [[nodiscard]] bool isConcat(const char* node) {
-    return unpack_node_type(node) != EntryType::ATOM;
+    const auto type = unpack_node_type(node);
+    return type > EntryType::SHORT_STRING;
 }
 
 [[nodiscard]] bool isShortConcatChild(const char* node) {
-    return unpack_node_type(node) > EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY;
+    return unpack_node_type(node) == EntryType::SHORT_STRING;
 }
 
 [[nodiscard]] size_t unpackLength(const char* node) {
@@ -81,19 +82,23 @@ string_handle::tree_walker::tree_walker(char* root)
     return node + offsets::atom::STRING_VALUE;
 }
 
+// Returns true iff the child is a leaf.
 [[nodiscard]] char* unpackLeftChild(char* concatNode) {
     auto* child = concatNode + offsets::concat::LEFT_PTR;
     const auto type = unpack_node_type(concatNode);
-    if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT || type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY)
+    if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT || type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY) {
         return *reinterpret_cast<char**>(child);
+    }
     return concatNode + offsets::concat::LEFT_PTR;
 }
 
+// Returns true iff the child is a leaf.
 [[nodiscard]] char* unpackRightChild(char* concatNode) {
     auto* child = concatNode + offsets::concat::RIGHT_PTR;
     const auto type = unpack_node_type(concatNode);
-    if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY || type == EntryType::CONCAT_LEFT_SHORT_RIGHT_ENTRY)
+    if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY || type == EntryType::CONCAT_LEFT_SHORT_RIGHT_ENTRY) {
         return *reinterpret_cast<char**>(child);
+    }
     return concatNode + offsets::concat::RIGHT_PTR;
 }
 
@@ -111,14 +116,18 @@ size_t string_handle::tree_walker::get_next_bytes(char** bytes) {
 }
 
 size_t string_handle::copy(char* destination, size_t destination_size) const {
+    if (destination_size == 0)
+        return 0;
     tree_walker walker(entry);
-    size_t totalLength = 0;
+    size_t copiedSoFar = 0;
     char* piece;
-    while (size_t pieceLength = walker.get_next_bytes(&piece)) {
-        std::memcpy(destination, piece, destination_size - totalLength);
-        totalLength += pieceLength;
+    size_t pieceLength;
+    while (copiedSoFar < destination_size && 0 != (pieceLength = walker.get_next_bytes(&piece))) {
+        const auto copyNow = std::min(pieceLength, destination_size - copiedSoFar);
+        std::memcpy(destination + copiedSoFar, piece, copyNow);
+        copiedSoFar += pieceLength;
     }
-    return totalLength;
+    return copiedSoFar;
 }
 
 size_t string_handle::hash() const {
@@ -149,6 +158,41 @@ int string_handle::strcmp(const char* rhs) const {
             return thisResult;
     }
     return 0;
+}
+
+int string_handle::strcmp(const string_handle& rhs) const {
+    if (entry == rhs.entry)
+        return 0;
+    tree_walker leftWalker(entry);
+    tree_walker rightWalker(rhs.entry);
+    char* leftPiece;
+    char* rightPiece;
+    size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
+    size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+    size_t leftPieceIndex = 0;
+    size_t rightPieceIndex = 0;
+    while (true) {
+        if (leftPieceLength == 0 || rightPieceLength == 0) {
+            if (leftPieceLength == 0 && rightPieceLength == 0)
+                return 0;
+            if (leftPieceLength == 0)
+                return 1; // Right string is shorter.
+            return -1; // Left string is shorter.
+        }
+        const auto thisLength = min(leftPieceLength, rightPieceLength);
+        const auto thisResult = std::strncmp(
+            leftPiece + leftPieceIndex,
+            rightPiece + rightPieceIndex,
+            thisLength);
+        if (thisResult != 0)
+            return thisResult;
+        leftPieceIndex += thisLength;
+        rightPieceIndex += thisLength;
+        if (leftPieceLength == leftPieceLength - 1)
+            leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
+        if (rightPieceIndex == rightPieceLength - 1)
+            rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+    }
 }
 
 bool string_handle::equal_entry(char* rhsEntry, size_t length) const {
@@ -296,7 +340,6 @@ pool::~pool() {
     std::free(data);
     std::free(table);
 }
-
 
 string_handle pool::intern(const char* string) {
     return intern(string, strlen(string));
@@ -451,13 +494,15 @@ string_handle pool::concat(string_handle left, string_handle right) {
         startOfConcat[0] = static_cast<char>(makeConcatType(leftIsShort, rightIsShort));
         std::memcpy(startOfConcat + 1, &totalLength, 7);
         if (leftIsShort) {
-            startOfConcat[offsets::concat::LEFT_PTR] = static_cast<char>(leftLength);
+            startOfConcat[offsets::concat::LEFT_PTR] = static_cast<char>(
+                (leftLength << 4) | static_cast<char>(EntryType::SHORT_STRING));
             left.copy(startOfConcat + offsets::concat::LEFT_PTR + 1, 7);
         } else {
             std::memcpy(startOfConcat + offsets::concat::LEFT_PTR, &left.entry, 8);
         }
         if (rightIsShort) {
-            startOfConcat[offsets::concat::RIGHT_PTR] = static_cast<char>(rightLength);
+            startOfConcat[offsets::concat::RIGHT_PTR] = static_cast<char>(
+                (rightLength << 4) | static_cast<char>(EntryType::SHORT_STRING));
             right.copy(startOfConcat + offsets::concat::RIGHT_PTR + 1, 7);
         } else {
             std::memcpy(startOfConcat + offsets::concat::RIGHT_PTR, &right.entry, 8);
