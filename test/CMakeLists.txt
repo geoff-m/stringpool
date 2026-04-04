@@ -4,7 +4,11 @@ add_executable(test-stringpool
     src/BasicTests.cpp
         src/StrcmpTests.cpp
         src/MemcmpTests.cpp
-        src/HashTests.cpp)
+        src/HashTests.cpp
+        src/include/Utility.h
+        src/Utility.cpp)
+
+target_include_directories(test-stringpool PRIVATE src/include)
 
 target_link_libraries(test-stringpool
     PRIVATE GTest::gtest_main

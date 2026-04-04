@@ -1,11 +1,21 @@
+#include <cstring>
 #include <gtest/gtest.h>
 #include "stringpool/stringpool.h"
+#include "Utility.h"
 
 using namespace stringpool;
 
 void expectStrcmp(int expectation, string_handle left, string_handle right) {
-    EXPECT_EQ(expectation, left.strcmp(right));
-    EXPECT_EQ(-expectation, right.strcmp(left));
+    expectSameSign(expectation, left.strcmp(right));
+    expectSameSign(-expectation, right.strcmp(left));
+}
+
+void expectStrcmp(int expectation, string_handle left, const char* right) {
+    expectSameSign(expectation, left.strcmp(right));
+}
+
+void expectStrcmp(int expectation, const char* left, string_handle right) {
+    expectSameSign(-expectation, right.strcmp(left));
 }
 
 TEST(Strcmp, Empty) {
@@ -14,23 +24,38 @@ TEST(Strcmp, Empty) {
     expectStrcmp(0, e, e);
 }
 
-TEST(Strcmp, L1) {
+TEST(Strcmp, EqualLength1) {
     pool p;
     auto e = p.intern("a");
     expectStrcmp(0, e, e);
 }
 
-TEST(Strcmp, L10) {
+TEST(Strcmp, EqualLenth10) {
     pool p;
     auto e = p.intern("0123456789");
     expectStrcmp(0, e, e);
 }
 
-TEST(Strcmp, L5) {
+void testStrcmp(const char* string1, const char* string2) {
     pool p;
-    auto a = p.intern("apples");
-    auto b = p.intern("bananas");
-    expectStrcmp(-1, a, b);
+    auto interned1 = p.intern(string1);
+    auto interned2 = p.intern(string2);
+    const auto expectedComparison = std::strcmp(string1, string2);
+    expectStrcmp(expectedComparison, interned1, interned2);
+    expectStrcmp(expectedComparison, interned1, string2);
+    expectStrcmp(expectedComparison, string1, interned2);
+}
+
+TEST(Strcmp, Length5_6) {
+    testStrcmp("apples", "bananas");
+}
+
+TEST(Strcmp, Length0_1) {
+    testStrcmp("", "x");
+}
+
+TEST(Strcmp, Length10_11) {
+    testStrcmp("0123456789", "01234567891");
 }
 
 TEST(Strcmp, ConcatAtomConcatLongLong) {

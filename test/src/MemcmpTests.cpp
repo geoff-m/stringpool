@@ -1,33 +1,44 @@
+#include <cstring>
 #include <gtest/gtest.h>
 #include "stringpool/stringpool.h"
+#include "Utility.h"
 
 using namespace stringpool;
 
-bool sameSign(int x, int y) {
-    if (x == 0)
-        return y == 0;
-    if (x < 0)
-        return y < 0;
-    return y > 0;
-}
-
 void expectMemcmp(int expectation, string_handle left, string_handle right, size_t length) {
-    EXPECT_TRUE(sameSign(expectation, left.memcmp(right, length)));
-    EXPECT_TRUE(sameSign(-expectation, right.memcmp(left, length)));
+
+    expectSameSign(expectation, left.memcmp(right, length));
+    expectSameSign(-expectation, right.memcmp(left, length));
 }
 
-TEST(Memcmp, ShortLong) {
-    pool p;
-    auto a = p.intern("a");
-    auto b = p.intern("leaf0123456789");
-    expectMemcmp(-1, a, b, 1);
+void expectMemcmp(int expectation, string_handle left, const char* right, size_t length) {
+    expectSameSign(expectation, left.memcmp(right, length));
 }
 
-TEST(Memcmp, LongLong) {
+void expectMemcmp(int expectation, const char* left, string_handle right, size_t length) {
+    expectSameSign(-expectation, right.memcmp(left, length));
+}
+
+void testMemcmp(const char* string1, const char* string2, size_t length) {
     pool p;
-    auto a = p.intern("leaf9876543210");
-    auto b = p.intern("leaf0123456789");
-    expectMemcmp(1, a, b, 1);
+    auto interned1 = p.intern(string1);
+    auto interned2 = p.intern(string2);
+    const auto expectedComparison = std::memcmp(string1, string2, length);
+    expectMemcmp(expectedComparison, interned1, interned2, length);
+    expectMemcmp(expectedComparison, interned1, string2, length);
+    expectMemcmp(expectedComparison, string1, interned2, length);
+}
+
+TEST(Memcmp, Length1_14) {
+    testMemcmp("a", "leaf0123456789", 1);
+}
+
+TEST(Memcmp, Length14_14) {
+    testMemcmp("leaf0123456789", "leaf0123456788", 14);
+}
+
+TEST(Memcmp, Length10_11) {
+    testMemcmp("0123456789", "01234567891", 10);
 }
 
 TEST(Memcmp, ConcatAtomConcatLongLong) {

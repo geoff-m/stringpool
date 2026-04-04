@@ -24,12 +24,17 @@ void expectEqual(const string_handle x, const string_handle y) {
     EXPECT_EQ(0, y.memcmp(x, y.size()));
 }
 
+void expectLength(size_t length, const string_handle interned) {
+    EXPECT_EQ(length, interned.size());
+    EXPECT_EQ(length, interned.length());
+}
 
 TEST(Basic, Add) {
     pool p;
     const auto string = "hello";
     const auto interned = p.intern(string);
     expectEqual(interned, string);
+    expectLength(strlen(string), interned);
 }
 
 TEST(Basic, Dedup) {
@@ -46,6 +51,7 @@ TEST(Basic, Empty) {
     const auto string = "";
     const auto interned = p.intern(string);
     expectEqual(interned, string);
+    expectLength(0, interned);
 }
 
 TEST(Basic, DedupEmpty) {
@@ -61,8 +67,19 @@ TEST(Basic, Concat1Plus1) {
     auto ib = p.intern("b");
     auto iab = p.concat(ia, ib);
     expectEqual(iab, "ab");
-    auto again = p.intern("ab");
-    expectEqual(iab, again);
+    expectLength(2, iab);
+}
+
+TEST(Basic, ConcatDedup) {
+    pool p;
+    auto ia = p.intern("a");
+    auto ib = p.intern("b");
+    auto iab = p.concat(ia, ib);
+    expectEqual(iab, "ab");
+    auto atomAgain = p.intern("ab");
+    expectEqual(iab, atomAgain);
+    auto concatAgain = p.concat(ia, ib);
+    expectEqual(iab, concatAgain);
 }
 
 TEST(Basic, Concat8Plus8) {

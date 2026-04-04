@@ -8,6 +8,7 @@
 #include <cassert>
 #include <cstring>
 #include <cstdlib>
+#include <stdexcept>
 
 using namespace stringpool;
 
@@ -159,7 +160,9 @@ int string_handle::strcmp(const char* rhs) const {
             return thisResult;
         comparedChars += pieceLength;
     }
-    return 0;
+    if (rhs[comparedChars] == 0)
+        return 0; // Left and right finished at same time.
+    return -1; // Left finished first.
 }
 
 int string_handle::strcmp(const string_handle& rhs) const {
@@ -178,8 +181,8 @@ int string_handle::strcmp(const string_handle& rhs) const {
             if (leftPieceLength == 0 && rightPieceLength == 0)
                 return 0;
             if (leftPieceLength == 0)
-                return 1; // Right string is shorter.
-            return -1; // Left string is shorter.
+                return -1; // Left string is shorter.
+            return 1; // Right string is shorter.
         }
         const auto thisLength = min(leftPieceLength, rightPieceLength);
         const auto thisResult = std::strncmp(
@@ -200,6 +203,7 @@ int string_handle::strcmp(const string_handle& rhs) const {
         }
     }
 }
+
 int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     if (entry == rhs.entry)
         return 0;
@@ -212,14 +216,8 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     assert(unpackLength(entry) >= length && unpackLength(rhs.entry) >= length);
     size_t leftPieceIndex = 0;
     size_t rightPieceIndex = 0;
-    while (true) {
-        if (leftPieceLength == 0 || rightPieceLength == 0) {
-            if (leftPieceLength == 0 && rightPieceLength == 0)
-                return 0;
-            if (leftPieceLength == 0)
-                return 1; // Right string is shorter.
-            return -1; // Left string is shorter.
-        }
+    size_t comparedChars = 0;
+    while (comparedChars < length) {
         const auto thisLength = min(leftPieceLength, rightPieceLength);
         const auto thisResult = std::memcmp(
             leftPiece + leftPieceIndex,
@@ -227,6 +225,7 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
             thisLength);
         if (thisResult != 0)
             return thisResult;
+        comparedChars += thisLength;
         leftPieceIndex += thisLength;
         rightPieceIndex += thisLength;
         if (leftPieceIndex == leftPieceLength) {
@@ -238,18 +237,33 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
             rightPieceIndex = 0;
         }
     }
+    return 0;
 }
 
-int string_handle::memcmp(const char* rhs, size_t rhsLength) const {
+int string_handle::memcmp(const char* rhs, size_t length) const {
     tree_walker walker(entry);
     char* piece;
-    size_t i = 0;
-    while (size_t pieceLength = walker.get_next_bytes(&piece)) {
-        const auto thisLength = min(pieceLength, rhsLength);
-        const auto thisResult = std::memcmp(rhs + i, piece, thisLength);
+    size_t charsCompared = 0;
+    size_t pieceLength = walker.get_next_bytes(&piece);
+    size_t pieceIndex = 0;
+    while (charsCompared < length) {
+        if (pieceLength == 0) {
+            std::string msg = "Length argument of ";
+            msg += std::to_string(length);
+            msg += " exceeds this string's length of ";
+            msg += std::to_string(unpackLength(entry));
+            throw std::invalid_argument(msg);
+        }
+        const auto thisLength = min(pieceLength, length);
+        const auto thisResult = std::memcmp(piece, rhs + charsCompared, thisLength);
         if (thisResult != 0)
             return thisResult;
-        i += thisLength;
+        charsCompared += thisLength;
+        pieceIndex += thisLength;
+        if (pieceIndex == pieceLength) {
+            pieceLength = walker.get_next_bytes(&piece);
+            pieceIndex = 0;
+        }
     }
     return 0;
 }
@@ -390,7 +404,6 @@ bool string_handle::concat_equals(char* entry, string_handle left, string_handle
     const auto rightLength = unpackLength(right.entry);
     if (entryLength != leftLength + rightLength)
         return false;
-
     tree_walker entryWalker(entry);
     tree_walker comparandWalker(left.entry);
     bool onLeft = true;
@@ -399,13 +412,11 @@ bool string_handle::concat_equals(char* entry, string_handle left, string_handle
     size_t comparedLength = 0;
     size_t entryPieceLength = entryWalker.get_next_bytes(&entryPiece);
     size_t comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
-    if (entryPieceLength != comparandPieceLength)
-        return false; // Root pieces must be of equal lengths.
     size_t entryPieceIndex = 0;
     size_t comparandPieceIndex = 0;
     while (true) {
         if (entryPieceLength == 0 || comparandPieceLength == 0)
-            return comparedLength == entryPieceIndex;
+            return comparedLength == entryLength;
         const auto thisLength = min(entryPieceLength, comparandPieceLength);
         const auto thisResult = std::memcmp(
             entryPiece + entryPieceIndex,
@@ -416,11 +427,11 @@ bool string_handle::concat_equals(char* entry, string_handle left, string_handle
         comparedLength += thisLength;
         entryPieceIndex += thisLength;
         comparandPieceIndex += thisLength;
-        if (entryPieceLength == entryPieceLength - 1) {
+        if (entryPieceIndex == entryPieceLength) {
             entryPieceLength = entryWalker.get_next_bytes(&entryPiece);
             entryPieceIndex = 0;
         }
-        if (comparandPieceIndex == comparandPieceLength - 1) {
+        if (comparandPieceIndex == comparandPieceLength) {
             comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
             if (comparandPieceLength == 0 && onLeft) {
                 onLeft = false;
