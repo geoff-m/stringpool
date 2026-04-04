@@ -61,6 +61,8 @@ TEST(Basic, Concat1Plus1) {
     auto ib = p.intern("b");
     auto iab = p.concat(ia, ib);
     expectEqual(iab, "ab");
+    auto again = p.intern("ab");
+    expectEqual(iab, again);
 }
 
 TEST(Basic, Concat8Plus8) {

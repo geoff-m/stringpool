@@ -20,10 +20,6 @@ namespace stringpool {
 
         string_handle(pool& owner, char* data);
 
-        [[nodiscard]] size_t hash() const;
-
-        void visit_pieces(void (*callback)(char* piece, size_t pieceSize, void* state), void* state) const;
-
         class tree_walker {
             char* root;
             std::deque<char*> toVisit;
@@ -34,16 +30,18 @@ namespace stringpool {
             [[nodiscard]] size_t get_next_bytes(char** bytes);
         };
 
-        // Gets whether this string is equal to the given one, considering only the first 'length' chars.
-        [[nodiscard]] bool equal_entry(char* rhsEntry, size_t length) const;
-
         [[nodiscard]] static bool concat_equals(char* entry, string_handle left, string_handle right);
 
     public:
+        void visit_pieces(void (*callback)(char* piece, size_t pieceSize, void* state), void* state) const;
+
         [[nodiscard]] size_t size() const;
+
         [[nodiscard]] size_t length() const;
 
         size_t copy(char* destination, size_t size) const;
+
+        [[nodiscard]] size_t hash() const;
 
         /**
          * Compares this string with the given one.
@@ -54,7 +52,6 @@ namespace stringpool {
 
         /**
          * Compares this string with the given one.
-         * Same as string_handle::memcmp(const string_handle&).
          * @param rhs The string to compare to this one.
          * @return The sign of the difference of the first byte that differs, or zero if none differ.
          */
@@ -62,7 +59,6 @@ namespace stringpool {
 
         /**
          * Compares this string with the given one.
-         * Same as string_handle::strcmp(const string_handle&).
          * @param rhs The string to compare to this one.
          * @return The sign of the difference of the first byte that differs, or zero if none differ.
          */

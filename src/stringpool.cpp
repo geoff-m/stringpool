@@ -8,8 +8,6 @@
 #include <cassert>
 #include <cstring>
 #include <cstdlib>
-#include <ios>
-#include <bits/ios_base.h>
 
 using namespace stringpool;
 
@@ -192,57 +190,16 @@ int string_handle::strcmp(const string_handle& rhs) const {
             return thisResult;
         leftPieceIndex += thisLength;
         rightPieceIndex += thisLength;
-        if (leftPieceLength == leftPieceLength - 1)
+        if (leftPieceIndex == leftPieceLength) {
             leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
-        if (rightPieceIndex == rightPieceLength - 1)
+            leftPieceIndex = 0;
+        }
+        if (rightPieceIndex == rightPieceLength) {
             rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+            rightPieceIndex = 0;
+        }
     }
 }
-
-bool string_handle::equal_entry(char* rhsEntry, size_t length) const {
-    if (entry == rhsEntry)
-        return true;
-    if (length == 0)
-        return true;
-    tree_walker leftWalker(entry);
-    tree_walker rightWalker(rhsEntry);
-    char* leftPiece;
-    char* rightPiece;
-    size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
-    size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
-    if (leftPieceLength <= length) {
-        if (rightPieceLength != leftPieceLength)
-            return false;
-    }
-    if (rightPieceLength <= length) {
-        if (rightPieceLength != leftPieceLength)
-            return false;
-    }
-    size_t leftPieceIndex = 0;
-    size_t rightPieceIndex = 0;
-    size_t comparedChars = 0;
-    while (true) {
-        if (leftPieceLength == 0 || rightPieceLength == 0)
-            return false;
-        const auto thisLength = min(leftPieceLength, rightPieceLength);
-        const auto thisResult = std::memcmp(
-            leftPiece + leftPieceIndex,
-            rightPiece + rightPieceIndex,
-            thisLength);
-        if (thisResult != 0)
-            return false;
-        if (comparedChars >= length)
-            return true;
-        comparedChars += thisLength;
-        leftPieceIndex += thisLength;
-        rightPieceIndex += thisLength;
-        if (leftPieceIndex == leftPieceLength)
-            leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
-        if (rightPieceIndex == rightPieceLength)
-            rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
-    }
-}
-
 int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     if (entry == rhs.entry)
         return 0;
@@ -356,7 +313,7 @@ void pool::updateTableSize(size_t newSize) {
         const auto newCapacity = tableCapacity * 2;
         table = static_cast<char**>(std::realloc(table, newCapacity));
         tableCapacity = newCapacity;
-        tableSizeBeforeReallocate = static_cast<size_t>(newCapacity / 4 * 3);
+        tableSizeBeforeReallocate = newCapacity / 4 * 3;
     }
 }
 
@@ -367,13 +324,12 @@ void pool::updateDataSize(size_t newSize) {
     dataSize = newSize;
 }
 
-
 pool::pool(size_t initial_table_capacity, size_t initial_data_capacity)
     : data(static_cast<char*>(std::calloc(initial_data_capacity, 1))),
       dataCapacity(initial_data_capacity),
       table(static_cast<char**>(std::calloc(initial_table_capacity, sizeof(char*)))),
       tableCapacity(initial_table_capacity),
-      tableSizeBeforeReallocate(static_cast<size_t>(initial_table_capacity / 4 * 3)) {
+      tableSizeBeforeReallocate(initial_table_capacity / 4 * 3) {
 }
 
 pool::pool()
@@ -392,7 +348,7 @@ string_handle pool::intern(const char* string) {
 string_handle pool::intern(const char* string, size_t size) {
     const auto h = hasher::hash(string, size);
     const auto indexMask = tableCapacity - 1;
-    auto index = static_cast<size_t>(h & indexMask);
+    auto index = h & indexMask;
     table_lock lock(*this);
     char* entry;
     for (entry = table[index]; entry != 0; index = (index + 1) & indexMask) {
@@ -419,7 +375,8 @@ char* pool::addAtom(const char* string, size_t size) {
     updateTableSize(tableSize + 1);
     const auto blockSize = 16 + size;
     updateDataSize(dataSize + blockSize);
-    assert(size == (size & ~UPPER_1_MASK)); // todo: replace this assert with some nicer failure mechanism
+    if (size != (size & ~UPPER_1_MASK))
+        std::abort(); // string is too large.
     char* startOfAtom = data + dataSize - blockSize;
     startOfAtom[0] = static_cast<char>(EntryType::ATOM);
     std::memcpy(startOfAtom + 1, &size, 7);
@@ -483,7 +440,7 @@ size_t string_handle::length() const {
     return size();
 }
 
-void addToHash(char* piece, size_t size, void* pHasher) {
+static void addToHash(char* piece, size_t size, void* pHasher) {
     static_cast<hasher*>(pHasher)->add(piece, size);
 }
 
@@ -504,7 +461,7 @@ string_handle pool::concat(string_handle left, string_handle right) {
     right.visit_pieces(addToHash, &h);
     const auto hash = h.finish();
     const auto indexMask = tableCapacity - 1;
-    auto index = static_cast<size_t>(hash & indexMask);
+    auto index = hash & indexMask;
     table_lock lock(*this);
     char* entry;
     for (entry = table[index]; entry != 0; index = (index + 1) & indexMask) {
