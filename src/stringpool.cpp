@@ -8,6 +8,8 @@
 #include <cassert>
 #include <cstring>
 #include <cstdlib>
+#include <ios>
+#include <bits/ios_base.h>
 
 using namespace stringpool;
 
@@ -232,15 +234,51 @@ bool string_handle::equal_entry(char* rhsEntry, size_t length) const {
         comparedChars += thisLength;
         leftPieceIndex += thisLength;
         rightPieceIndex += thisLength;
-        if (leftPieceLength == leftPieceLength - 1)
+        if (leftPieceIndex == leftPieceLength)
             leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
-        if (rightPieceIndex == rightPieceLength - 1)
+        if (rightPieceIndex == rightPieceLength)
             rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
     }
 }
 
-int string_handle::memcmp(const string_handle& rhs) const {
-    return equal_entry(rhs.entry, unpackLength(entry));
+int string_handle::memcmp(const string_handle& rhs, size_t length) const {
+    if (entry == rhs.entry)
+        return 0;
+    tree_walker leftWalker(entry);
+    tree_walker rightWalker(rhs.entry);
+    char* leftPiece;
+    char* rightPiece;
+    size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
+    size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+    assert(unpackLength(entry) >= length && unpackLength(rhs.entry) >= length);
+    size_t leftPieceIndex = 0;
+    size_t rightPieceIndex = 0;
+    while (true) {
+        if (leftPieceLength == 0 || rightPieceLength == 0) {
+            if (leftPieceLength == 0 && rightPieceLength == 0)
+                return 0;
+            if (leftPieceLength == 0)
+                return 1; // Right string is shorter.
+            return -1; // Left string is shorter.
+        }
+        const auto thisLength = min(leftPieceLength, rightPieceLength);
+        const auto thisResult = std::memcmp(
+            leftPiece + leftPieceIndex,
+            rightPiece + rightPieceIndex,
+            thisLength);
+        if (thisResult != 0)
+            return thisResult;
+        leftPieceIndex += thisLength;
+        rightPieceIndex += thisLength;
+        if (leftPieceIndex == leftPieceLength) {
+            leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
+            leftPieceIndex = 0;
+        }
+        if (rightPieceIndex == rightPieceLength) {
+            rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+            rightPieceIndex = 0;
+        }
+    }
 }
 
 int string_handle::memcmp(const char* rhs, size_t rhsLength) const {
@@ -290,10 +328,14 @@ bool string_handle::equals(const string_handle& rhs) const {
             return thisResult;
         leftPieceIndex += thisLength;
         rightPieceIndex += thisLength;
-        if (leftPieceIndex == leftPieceLength)
+        if (leftPieceIndex == leftPieceLength) {
             leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
-        if (rightPieceIndex == rightPieceLength)
+            leftPieceIndex = 0;
+        }
+        if (rightPieceIndex == rightPieceLength) {
             rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
+            rightPieceIndex = 0;
+        }
     }
 }
 

@@ -63,7 +63,7 @@ namespace stringpool {
          * @param rhs The string to compare to this one.
          * @return The sign of the difference of the first byte that differs, or zero if none differ.
          */
-        [[nodiscard]] int memcmp(const string_handle& rhs) const;
+        [[nodiscard]] int memcmp(const string_handle& rhs, size_t length) const;
 
         /**
          * Compares this string with the given one.
