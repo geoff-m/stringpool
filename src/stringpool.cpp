@@ -1,14 +1,8 @@
-// todo: can't have parent pointers,
-// because we want to allow things to have multiple parents.
-// therefore we have to use temporary stacks for walking trees.
-// on the bright side, we don't have to store parent pointers.
 #include "stringpool/stringpool.h"
 #include "include/hash.h"
-#include <atomic>
 #include <cassert>
 #include <cstring>
 #include <cstdlib>
-#include <optional>
 #include <stdexcept>
 
 using namespace stringpool;
@@ -116,7 +110,6 @@ size_t string_handle::tree_walker::get_next_bytes(char** bytes) {
     while (isConcat(baseAddress + current)) {
         const auto rightChildIndex = unpackRightChild(baseAddress, current);
         const auto leftChildIndex = unpackLeftChild(baseAddress, current);
-        printf("%ld has children [%ld, %ld]\n", current, leftChildIndex, rightChildIndex);
         toVisit.emplace_back(rightChildIndex);
         current = leftChildIndex;
     }
@@ -264,8 +257,7 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     return 0;
 }
 
-int string_handle::memcmp(const char* rhs, size_t length) const {
-    auto lock = pool::lock_for_reading(*owner);
+[[nodiscard]] int string_handle::memcmp_unsafe(const char* rhs, size_t length) const {
     tree_walker walker(*owner, dataIndex);
     char* piece;
     size_t charsCompared = 0;
@@ -296,13 +288,20 @@ int string_handle::memcmp(const char* rhs, size_t length) const {
     return 0;
 }
 
+int string_handle::memcmp(const char* rhs, size_t length) const {
+    auto lock = pool::lock_for_reading(*owner);
+    return memcmp_unsafe(rhs, length);
+}
+
+bool string_handle::equals_unsafe(const char* rhs, size_t length) const {
+    if (unpackLength(owner->data + dataIndex) != length)
+        return false;
+    return 0 == memcmp_unsafe(rhs, length);
+}
+
 bool string_handle::equals(const char* rhs, size_t length) const {
-    {
-        auto lock = pool::lock_for_reading(*owner);
-        if (unpackLength(owner->data + dataIndex) != length)
-            return false;
-    } // unlock because memcmp will lock again.
-    return 0 == memcmp(rhs, length);
+    auto lock = pool::lock_for_reading(*owner);
+    return equals_unsafe(rhs, length);
 }
 
 bool string_handle::equals(const char* rhs) const {
@@ -371,7 +370,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     if (it != table.end()) {
         auto existingEntries = it->second;
         for (string_handle existingEntry : existingEntries) {
-            if (existingEntry.equals(string, size)) {
+            if (existingEntry.equals_unsafe(string, size)) {
                 result = existingEntry;
                 return InternResult::Success;
             }
@@ -380,7 +379,6 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
             return InternResult::NeedWriterLock;
         char* atom = add_atom_unsafe(string, size);
         string_handle ret(this, atom - data);
-        printf("Created atom %ld\n", ret.dataIndex);
         existingEntries.push_back(ret);
         result = ret;
         return InternResult::Success;
@@ -391,7 +389,6 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     char* atom = add_atom_unsafe(string, size);
     auto r = table.emplace(hash, std::list<string_handle>());
     string_handle ret(this, atom - data);
-    printf("Created atom %ld\n", ret.dataIndex);
     r.first->second.push_back(ret);
     result = ret;
     return InternResult::Success;
@@ -416,11 +413,14 @@ string_handle pool::intern(const char* string, size_t size) {
 
 void pool::updateDataSizeUnsafe(size_t newSize) {
     if (newSize > dataCapacity) {
-        dataCapacity = dataCapacity + (dataCapacity >> 1);
-        printf("Increased data capacity to %ld\n", dataCapacity);
+        const auto newDataCapacity = std::max(
+            dataCapacity + (dataCapacity >> 1),
+            dataCapacity + (newSize - dataCapacity) * 2);
+        dataCapacity = newDataCapacity;
         data = static_cast<char*>(std::realloc(data, dataCapacity));
     }
     dataSize = newSize;
+    assert(dataCapacity >= newSize);
 }
 
 char* pool::add_atom_unsafe(const char* string, size_t size) {
@@ -435,30 +435,31 @@ char* pool::add_atom_unsafe(const char* string, size_t size) {
     return startOfAtom;
 }
 
-bool string_handle::concat_equals_unsafe(char* entry, string_handle left, string_handle right) {
+bool string_handle::concat_equals_unsafe(string_handle single, string_handle left, string_handle right) {
+    auto* singleEntry = single.owner->data + single.dataIndex;
     auto* leftEntry = left.owner->data + left.dataIndex;
     auto* rightEntry = right.owner->data + right.dataIndex;
-    const auto entryLength = unpackLength(entry);
+    const auto comparandLength = unpackLength(singleEntry);
     const auto leftLength = unpackLength(leftEntry);
     const auto rightLength = unpackLength(rightEntry);
-    if (entryLength != leftLength + rightLength)
+    if (comparandLength != leftLength + rightLength)
         return false;
-    tree_walker entryWalker(entry, 0);
+    tree_walker singleWalker(*single.owner, single.dataIndex);
     tree_walker comparandWalker(*left.owner, left.dataIndex);
     bool onLeft = true;
-    char* entryPiece;
+    char* singlePiece;
     char* comparandPiece;
     size_t comparedLength = 0;
-    size_t entryPieceLength = entryWalker.get_next_bytes(&entryPiece);
+    size_t singlePieceLength = singleWalker.get_next_bytes(&singlePiece);
     size_t comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
     size_t entryPieceIndex = 0;
     size_t comparandPieceIndex = 0;
     while (true) {
-        if (entryPieceLength == 0 || comparandPieceLength == 0)
-            return comparedLength == entryLength;
-        const auto thisLength = min(entryPieceLength, comparandPieceLength);
+        if (singlePieceLength == 0 || comparandPieceLength == 0)
+            return comparedLength == comparandLength;
+        const auto thisLength = min(singlePieceLength, comparandPieceLength);
         const auto thisResult = std::memcmp(
-            entryPiece + entryPieceIndex,
+            singlePiece + entryPieceIndex,
             comparandPiece + comparandPieceIndex,
             thisLength);
         if (thisResult != 0)
@@ -466,8 +467,8 @@ bool string_handle::concat_equals_unsafe(char* entry, string_handle left, string
         comparedLength += thisLength;
         entryPieceIndex += thisLength;
         comparandPieceIndex += thisLength;
-        if (entryPieceIndex == entryPieceLength) {
-            entryPieceLength = entryWalker.get_next_bytes(&entryPiece);
+        if (entryPieceIndex == singlePieceLength) {
+            singlePieceLength = singleWalker.get_next_bytes(&singlePiece);
             entryPieceIndex = 0;
         }
         if (comparandPieceIndex == comparandPieceLength) {
@@ -523,7 +524,6 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
         auto r = table.emplace(hash, std::list<string_handle>());
         string_handle ret(this, startOfAtom - data);
         r.first->second.push_back(ret);
-        printf("Created atom (short concat) %ld\n", ret.dataIndex);
         return ret;
     } else {
         // We will store the concatenation as a concat node.
@@ -542,7 +542,6 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
             left.copy_unsafe(startOfConcat + offsets::concat::LEFT_PTR + 1, 7);
         } else {
             std::memcpy(startOfConcat + offsets::concat::LEFT_PTR, &left.dataIndex, 8);
-            printf("Concat %ld's left child is index %ld\n", startOfConcat - data, left.dataIndex);
         }
         if (rightIsShort) {
             startOfConcat[offsets::concat::RIGHT_PTR] = static_cast<char>(
@@ -550,12 +549,10 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
             right.copy_unsafe(startOfConcat + offsets::concat::RIGHT_PTR + 1, 7);
         } else {
             std::memcpy(startOfConcat + offsets::concat::RIGHT_PTR, &right.dataIndex, 8);
-            printf("Concat %ld's right child is index %ld\n", startOfConcat - data, right.dataIndex);
         }
         auto r = table.emplace(hash, std::list<string_handle>());
         string_handle ret(this, startOfConcat - data);
         r.first->second.push_back(ret);
-        //printf("Created concat %ld\n", ret.dataIndex);
         return ret;
     }
 }
@@ -572,8 +569,7 @@ pool::InternResult pool::concat_helper_unsafe(size_t hash, string_handle left, s
     }
     auto existingEntries = it->second;
     for (string_handle existingEntry : existingEntries) {
-        if (string_handle::concat_equals_unsafe(
-            existingEntry.owner->data + existingEntry.dataIndex, left, right)) {
+        if (string_handle::concat_equals_unsafe(existingEntry, left, right)) {
             result = existingEntry;
             return InternResult::Success;
         }
@@ -585,21 +581,19 @@ pool::InternResult pool::concat_helper_unsafe(size_t hash, string_handle left, s
 }
 
 string_handle pool::concat(string_handle left, string_handle right) {
-    size_t hash;
-    {
-        auto lock = lock_for_reading(*left.owner, *right.owner);
-        hasher h;
-        left.visit_pieces(addToHash, &h);
-        right.visit_pieces(addToHash, &h);
-        hash = h.finish();
-    }
+    if (left.owner != this || right.owner != this)
+        throw std::invalid_argument("Concatenated strings must be owned by this string_pool");
 
-    auto readLock = lock_for_reading(*this, *left.owner, *right.owner);
+    auto readLock = lock_for_reading(*this);
+    hasher h;
+    left.visit_pieces(addToHash, &h);
+    right.visit_pieces(addToHash, &h);
+    const auto hash = h.finish();
     string_handle result{};
     auto readResult = concat_helper_unsafe(hash, left, right, false, result);
     if (readResult == InternResult::NeedWriterLock) {
         readLock.unlock();
-        auto writeLock = lock_for_reading_and_writing(*this, *left.owner, *right.owner);
+        auto writeLock = lock_for_writing(*this);
         auto writeResult = concat_helper_unsafe(hash, left, right, true, result);
         assert(writeResult == InternResult::Success);
         return result;

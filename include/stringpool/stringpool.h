@@ -43,10 +43,13 @@ namespace stringpool {
             [[nodiscard]] size_t get_next_bytes(char** bytes);
         };
 
-        [[nodiscard]] static bool concat_equals_unsafe(char* entry, string_handle left, string_handle right);
+        [[nodiscard]] static bool concat_equals_unsafe(string_handle single, string_handle left, string_handle right);
 
         size_t copy_unsafe(char* destination, size_t destination_size) const;
 
+        [[nodiscard]] bool equals_unsafe(const char* rhs, size_t length) const;
+
+        [[nodiscard]] int memcmp_unsafe(const char* rhs, size_t length) const;
     public:
         void visit_pieces(void (*callback)(char* piece, size_t pieceSize, void* state), void* state) const;
 
@@ -55,7 +58,6 @@ namespace stringpool {
         [[nodiscard]] size_t length() const;
 
         size_t copy(char* destination, size_t size) const;
-
 
         [[nodiscard]] size_t hash() const;
 
@@ -218,108 +220,108 @@ namespace stringpool {
                 std::shared_lock(p1.tableRwMutex, std::defer_lock),
                 std::shared_lock(p2.tableRwMutex, std::defer_lock));
         }
+        //
+        // // All arguments must be distinct.
+        // [[nodiscard]] static reader_lock lock_distinct_for_reading(pool& p1, pool& p2) {
+        //     return reader_lock(
+        //         std::shared_lock(p1.tableRwMutex, std::defer_lock),
+        //         std::shared_lock(p2.tableRwMutex, std::defer_lock));
+        // }
+        //
+        // // All arguments must be distinct.
+        // [[nodiscard]] static reader_lock lock_distinct_for_reading(pool& p1, pool& p2, pool& p3) {
+        //     return reader_lock(
+        //         std::shared_lock(p1.tableRwMutex, std::defer_lock),
+        //         std::shared_lock(p2.tableRwMutex, std::defer_lock),
+        //         std::shared_lock(p3.tableRwMutex, std::defer_lock));
+        // }
 
-        // All arguments must be distinct.
-        [[nodiscard]] static reader_lock lock_distinct_for_reading(pool& p1, pool& p2) {
-            return reader_lock(
-                std::shared_lock(p1.tableRwMutex, std::defer_lock),
-                std::shared_lock(p2.tableRwMutex, std::defer_lock));
-        }
+        // // Arguments don't have to be distinct.
+        // [[nodiscard]] static reader_lock lock_for_reading(pool& p1, pool& p2, pool& p3) {
+        //     const bool oneIsTwo = &p1 == &p2;
+        //     const bool oneIsThree = &p1 == &p3;
+        //     const bool twoIsThree = &p2 == &p3;
+        //     if (oneIsTwo) {
+        //         if (twoIsThree) {
+        //             return lock_for_reading(p1);
+        //         } else {
+        //             if (oneIsThree) {
+        //                 return lock_for_reading(p1);
+        //             } else {
+        //                 return lock_distinct_for_reading(p1, p3);
+        //             }
+        //         }
+        //     } else {
+        //         if (twoIsThree) {
+        //             return lock_distinct_for_reading(p1, p2);
+        //         } else {
+        //             if (oneIsThree) {
+        //                 return lock_distinct_for_reading(p1, p2);
+        //             } else {
+        //                 return lock_distinct_for_reading(p1, p2, p3);
+        //             }
+        //         }
+        //     }
+        // }
+        //
+        // // Locks the first pool for writing and the second pool for reading.
+        // // All arguments must be distinct.
+        // [[nodiscard]] static writer_lock_reader_locks lock_distinct_for_reading_and_writing(pool& write, pool& read) {
+        //     return writer_lock_reader_locks(
+        //         std::unique_lock(write.tableRwMutex, std::defer_lock),
+        //         std::shared_lock(read.tableRwMutex, std::defer_lock));
+        // }
 
-        // All arguments must be distinct.
-        [[nodiscard]] static reader_lock lock_distinct_for_reading(pool& p1, pool& p2, pool& p3) {
-            return reader_lock(
-                std::shared_lock(p1.tableRwMutex, std::defer_lock),
-                std::shared_lock(p2.tableRwMutex, std::defer_lock),
-                std::shared_lock(p3.tableRwMutex, std::defer_lock));
-        }
+        // // Locks the first pool for writing and the second two pools for reading.
+        // // All arguments must be distinct.
+        // [[nodiscard]] static writer_lock_reader_locks lock_distinct_for_reading_and_writing(
+        //     pool& write, pool& read1, pool& read2) {
+        //     return writer_lock_reader_locks(
+        //         std::unique_lock(write.tableRwMutex, std::defer_lock),
+        //         std::shared_lock(read1.tableRwMutex, std::defer_lock),
+        //         std::shared_lock(read2.tableRwMutex, std::defer_lock));
+        // }
 
-        // Arguments don't have to be distinct.
-        [[nodiscard]] static reader_lock lock_for_reading(pool& p1, pool& p2, pool& p3) {
-            const bool oneIsTwo = &p1 == &p2;
-            const bool oneIsThree = &p1 == &p3;
-            const bool twoIsThree = &p2 == &p3;
-            if (oneIsTwo) {
-                if (twoIsThree) {
-                    return lock_for_reading(p1);
-                } else {
-                    if (oneIsThree) {
-                        return lock_for_reading(p1);
-                    } else {
-                        return lock_distinct_for_reading(p1, p3);
-                    }
-                }
-            } else {
-                if (twoIsThree) {
-                    return lock_distinct_for_reading(p1, p2);
-                } else {
-                    if (oneIsThree) {
-                        return lock_distinct_for_reading(p1, p2);
-                    } else {
-                        return lock_distinct_for_reading(p1, p2, p3);
-                    }
-                }
-            }
-        }
-
-        // Locks the first pool for writing and the second pool for reading.
-        // All arguments must be distinct.
-        [[nodiscard]] static writer_lock_reader_locks lock_distinct_for_reading_and_writing(pool& write, pool& read) {
-            return writer_lock_reader_locks(
-                std::unique_lock(write.tableRwMutex, std::defer_lock),
-                std::shared_lock(read.tableRwMutex, std::defer_lock));
-        }
-
-        // Locks the first pool for writing and the second two pools for reading.
-        // All arguments must be distinct.
-        [[nodiscard]] static writer_lock_reader_locks lock_distinct_for_reading_and_writing(
-            pool& write, pool& read1, pool& read2) {
-            return writer_lock_reader_locks(
-                std::unique_lock(write.tableRwMutex, std::defer_lock),
-                std::shared_lock(read1.tableRwMutex, std::defer_lock),
-                std::shared_lock(read2.tableRwMutex, std::defer_lock));
-        }
-
-        // Locks the first pool for writing and the second two pools for reading.
-        // If any pools are the same, no pool will be locked more than once.
-        // If the write argument is equal to either read argument, that pool
-        // will be locked for writing.
-        [[nodiscard]] static writer_lock_reader_locks lock_for_reading_and_writing(
-            pool& write, pool& read1, pool& read2) {
-            bool shouldLockRead1 = true;
-            bool shouldLockRead2 = true;
-            if (&write == &read1)
-                shouldLockRead1 = false;
-            if (&write == &read2)
-                shouldLockRead2 = false;
-            if (&read1 == &read2)
-                shouldLockRead2 = false;
-            if (shouldLockRead1) {
-                if (shouldLockRead2) {
-                    return lock_distinct_for_reading_and_writing(write, read1, read2);
-                } else {
-                    return lock_distinct_for_reading_and_writing(write, read1);
-                }
-            } else {
-                if (shouldLockRead2) {
-                    return lock_distinct_for_reading_and_writing(write, read2);
-                } else {
-                    return writer_lock_reader_locks(std::unique_lock(write.tableRwMutex, std::defer_lock));
-                }
-            }
-        }
+        // // Locks the first pool for writing and the second two pools for reading.
+        // // If any pools are the same, no pool will be locked more than once.
+        // // If the write argument is equal to either read argument, that pool
+        // // will be locked for writing.
+        // [[nodiscard]] static writer_lock_reader_locks lock_for_reading_and_writing(
+        //     pool& write, pool& read1, pool& read2) {
+        //     bool shouldLockRead1 = true;
+        //     bool shouldLockRead2 = true;
+        //     if (&write == &read1)
+        //         shouldLockRead1 = false;
+        //     if (&write == &read2)
+        //         shouldLockRead2 = false;
+        //     if (&read1 == &read2)
+        //         shouldLockRead2 = false;
+        //     if (shouldLockRead1) {
+        //         if (shouldLockRead2) {
+        //             return lock_distinct_for_reading_and_writing(write, read1, read2);
+        //         } else {
+        //             return lock_distinct_for_reading_and_writing(write, read1);
+        //         }
+        //     } else {
+        //         if (shouldLockRead2) {
+        //             return lock_distinct_for_reading_and_writing(write, read2);
+        //         } else {
+        //             return writer_lock_reader_locks(std::unique_lock(write.tableRwMutex, std::defer_lock));
+        //         }
+        //     }
+        // }
 
         [[nodiscard]] static writer_lock lock_for_writing(pool& p1) {
             return writer_lock(std::unique_lock(p1.tableRwMutex));
         }
 
-        [[nodiscard]] static writer_lock lock_for_writing(pool& p1, pool& p2) {
-            if (&p1 == &p2)
-                return lock_for_writing(p1);
-            return writer_lock(
-                std::unique_lock(p1.tableRwMutex, std::defer_lock),
-                std::unique_lock(p2.tableRwMutex, std::defer_lock));
-        }
+        // [[nodiscard]] static writer_lock lock_for_writing(pool& p1, pool& p2) {
+        //     if (&p1 == &p2)
+        //         return lock_for_writing(p1);
+        //     return writer_lock(
+        //         std::unique_lock(p1.tableRwMutex, std::defer_lock),
+        //         std::unique_lock(p2.tableRwMutex, std::defer_lock));
+        // }
 
         // These functions are not thread-safe.
         char* add_atom_unsafe(const char* string, size_t size);
