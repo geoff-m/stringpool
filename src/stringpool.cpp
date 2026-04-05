@@ -417,6 +417,7 @@ string_handle pool::intern(const char* string, size_t size) {
 void pool::updateDataSizeUnsafe(size_t newSize) {
     if (newSize > dataCapacity) {
         dataCapacity = dataCapacity + (dataCapacity >> 1);
+        printf("Increased data capacity to %ld\n", dataCapacity);
         data = static_cast<char*>(std::realloc(data, dataCapacity));
     }
     dataSize = newSize;
@@ -424,8 +425,8 @@ void pool::updateDataSizeUnsafe(size_t newSize) {
 
 char* pool::add_atom_unsafe(const char* string, size_t size) {
     const auto blockSize = 16 + size;
-    char* startOfAtom = data + dataSize;
     updateDataSizeUnsafe(dataSize + blockSize);
+    char* startOfAtom = data + dataSize - blockSize;
     if (size != (size & ~UPPER_1_MASK))
         std::abort(); // string is too large.
     startOfAtom[0] = static_cast<char>(EntryType::ATOM);
@@ -513,8 +514,8 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
     if (totalLength <= CONCAT_ENTRY_SIZE - ATOM_ENTRY_SIZE) {
         // We will store the concatenation as a single atom node.
         const auto blockSize = ATOM_ENTRY_SIZE + totalLength;
-        char* startOfAtom = data + dataSize;
         updateDataSizeUnsafe(dataSize + blockSize);
+        char* startOfAtom = data + dataSize - blockSize;
         startOfAtom[0] = static_cast<char>(EntryType::ATOM);
         std::memcpy(startOfAtom + 1, &totalLength, 7);
         left.copy_unsafe(startOfAtom + offsets::atom::STRING_VALUE, leftLength);
@@ -529,8 +530,8 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
         const auto blockSize = CONCAT_ENTRY_SIZE;
-        char* startOfConcat = data + dataSize;
         updateDataSizeUnsafe(dataSize + blockSize);
+        char* startOfConcat = data + dataSize - blockSize;
         const auto leftIsShort = leftLength <= 7;
         const auto rightIsShort = rightLength <= 7;
         startOfConcat[0] = static_cast<char>(makeConcatType(leftIsShort, rightIsShort));
