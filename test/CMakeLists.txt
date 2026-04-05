@@ -9,7 +9,8 @@ add_executable(test-stringpool
         src/Utility.cpp
         src/GrowTableTests.cpp
         src/RaceTests.cpp
-        src/CrossPool.cpp)
+        src/CrossPool.cpp
+        src/TestStatistics.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 

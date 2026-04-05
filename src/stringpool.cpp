@@ -372,6 +372,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         for (string_handle existingEntry : existingEntries) {
             if (existingEntry.equals_unsafe(string, size)) {
                 result = existingEntry;
+                ++internHits;
                 return InternResult::Success;
             }
         }
@@ -381,6 +382,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         string_handle ret(this, atom - data);
         existingEntries.push_back(ret);
         result = ret;
+        ++internMisses;
         return InternResult::Success;
     }
     // Nothing in table has this hash.
@@ -391,12 +393,15 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     string_handle ret(this, atom - data);
     r.first->second.push_back(ret);
     result = ret;
+    ++internMisses;
     return InternResult::Success;
 }
 
 string_handle pool::intern(const char* string, size_t size) {
     const auto hash = hasher::hash(string, size);
     auto readLock = lock_for_reading(*this);
+    ++totalInternRequestCount;
+    totalInternRequestSize += size;
     string_handle result{};
     auto resultWithRead = do_intern_unsafe(hash, string, size, false, result);
     if (resultWithRead == InternResult::NeedWriterLock) {
