@@ -6,7 +6,8 @@ add_executable(test-stringpool
         src/MemcmpTests.cpp
         src/HashTests.cpp
         src/include/Utility.h
-        src/Utility.cpp)
+        src/Utility.cpp
+        src/GrowTableTests.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 
