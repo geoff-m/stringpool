@@ -8,7 +8,10 @@ add_library(stringpool STATIC
         include/stringpool/stringpool.h
         src/include/hash.h
         src/hash.cpp
-        src/statistics.cpp)
+        src/statistics.cpp
+        src/string_handle.cpp
+        src/pack_utils.cpp
+        src/include/pack_utils.h)
 
 target_include_directories(stringpool PUBLIC include)
 
