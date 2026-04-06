@@ -4,16 +4,17 @@
 #include <list>
 #include <mutex>
 #include <shared_mutex>
+#include <string>
 #include <unordered_map>
 
 namespace stringpool {
-    struct allocator {
-        char* allocate(size_t size);
-
-        void deallocate(char* ptr, size_t size);
-
-        char* reallocate(char* ptr, size_t oldSize, size_t newSize);
-    };
+    // struct allocator {
+    //     char* allocate(size_t size);
+    //
+    //     void deallocate(char* ptr, size_t size);
+    //
+    //     char* reallocate(char* ptr, size_t oldSize, size_t newSize);
+    // };
 
     class pool;
 
@@ -50,14 +51,39 @@ namespace stringpool {
 
         [[nodiscard]] int memcmp_unsafe(const char* rhs, size_t length) const;
     public:
-        void visit_pieces(void (*callback)(const char* piece, size_t pieceSize, void* state), void* state) const;
 
+        /**
+         * Gets the length of the string represented by this instance.
+         * Same as string_handle::length.
+         * @return The length of this string in bytes.
+         */
         [[nodiscard]] size_t size() const;
 
+        /**
+         * Gets the length of the string represented by this instance.
+         * Same as string_handle::size.
+         * @return The length of this string in bytes.
+         */
         [[nodiscard]] size_t length() const;
 
+        /**
+         * Copies this string.
+         * @param destination The place to write the data of this string.
+         * @param size The maximum number of bytes to write. Must not exceed the length of this string.
+         * @return The number of bytes written.
+         */
         size_t copy(char* destination, size_t size) const;
 
+        /**
+         * Copies this instance to a new std::string.
+         * @return An std::string representing this string.
+         */
+        [[nodiscard]] std::string to_string() const;
+
+        /**
+         * Computes a hash on this string.
+         * @return A non-cryptographic hash of this string.
+         */
         [[nodiscard]] size_t hash() const;
 
         /**
@@ -99,6 +125,13 @@ namespace stringpool {
 
         /**
          * Compares this string with the given one.
+         * @param rhs The string to compare to this one.
+         * @return True if and only if the strings are equal.
+         */
+        [[nodiscard]] bool equals(std::string_view rhs) const;
+
+        /**
+         * Compares this string with the given one.
          * @param rhs The null-terminated string to compare to this one.
          * @return True if and only if the strings are equal.
          */
@@ -110,6 +143,20 @@ namespace stringpool {
          * @return True if and only if the strings are equal.
          */
         [[nodiscard]] bool equals(const string_handle& rhs) const;
+
+        /**
+         * Invokes a callback on this string in a possibly piecewise manner.
+         * @param callback A callback that will receive the data of this string.
+         * @param state An arbitrary parameter that will be passed to the callback unchanged.
+         */
+        void visit_chunks(void (*callback)(const char* chunk, size_t chunk_size, void* state), void* state) const;
+
+        /**
+         * Invokes a callback on this string in a possibly piecewise manner.
+         * @param callback A callback that will receive the data of this string.
+         * @param state An arbitrary parameter that will be passed to the callback unchanged.
+         */
+        void visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state) const;
     };
 
     class pool {
@@ -121,7 +168,7 @@ namespace stringpool {
         // Prevents concurrent changes to table contents.
         std::shared_mutex tableRwMutex;
 
-        void updateDataSizeUnsafe(size_t newSize);
+        void update_data_size_unsafe(size_t newSize);
 
         // key: hash
         // value: list of strings having that hash
@@ -227,7 +274,7 @@ namespace stringpool {
         // These functions are not thread-safe.
         char* add_atom_unsafe(const char* string, size_t stringSize);
 
-        string_handle insertConcatUnsafe(size_t hash, string_handle left, string_handle right);
+        string_handle add_concat_unsafe(size_t hash, string_handle left, string_handle right);
 
         enum class InternResult {
             Success = 0,
@@ -242,7 +289,7 @@ namespace stringpool {
                                       string_handle& result);
 
         // Caller must hold reader (or writer) lock on this and left and right owners.
-        InternResult concat_helper_unsafe(
+        InternResult do_concat_unsafe(
             size_t hash,
             string_handle left,
             string_handle right,
@@ -256,23 +303,74 @@ namespace stringpool {
         size_t internMisses = 0;
 
     public:
+        /**
+         * Creates a new stringpool.
+         * @param initial_table_capacity Initial capacity of the internal table, which has one entry for each interned string.
+         * @param initial_data_capacity Initial capacity of the internal data buffer, which stores string contents.
+         */
         pool(size_t initial_table_capacity, size_t initial_data_capacity);
 
+        /**
+         * Creates a new stringpool.
+         */
         pool();
 
         ~pool();
 
+        /**
+         * Gets a cached version of the given string, adding it to the cache if not already present.
+         * @param string The string to cache.
+         * @return Handle to the cached version of the string.
+         */
         string_handle intern(const char* string);
 
+        /**
+         * Gets a cached version of the given string, adding it to the cache if not already present.
+         * @param string The string to cache.
+         * @param size The length of the string to cache.
+         * @return Handle to the cached version of the string.
+         */
         string_handle intern(const char* string, size_t size);
 
+        /**
+         * Gets a cached version of the given string, adding it to the cache if not already present.
+         * @param string The string to cache.
+         * @return Handle to the cached version of the string.
+         */
+        string_handle intern(std::string_view string);
+
+        /**
+         * Gets a cached version of the string represented by the concatenation of two given ones,
+         * adding it to the cache if not already present.
+         * @param left The first string forming the concatenation.
+         * @param right The second string forming the concatenation.
+         * @return Handle to the cached version of the concatenation.
+         */
         string_handle concat(string_handle left, string_handle right);
 
-        // Statistics.
+        /**
+         * Gets the overall number of bytes in strings passed to intern calls.
+         */
         [[nodiscard]] size_t get_total_intern_request_size() const;
+
+        /**
+         * Gets the overall number of calls made to intern.
+         */
         [[nodiscard]] size_t get_total_intern_request_count() const;
+
+        /**
+         * Gets the number calls made to intern that returned without adding anything to the cache.
+         */
         [[nodiscard]] size_t get_total_intern_request_hits() const;
+
+        /**
+         * Gets the number of calls made to intern that resulted in data being added to the cache.
+         */
         [[nodiscard]] size_t get_total_intern_request_misses() const;
+
+        /**
+         * Gets the approximate size of the data cache of this instance.
+         */
         [[nodiscard]] size_t get_data_size() const;
     };
 }

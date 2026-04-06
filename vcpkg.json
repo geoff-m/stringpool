@@ -1,6 +1,5 @@
 {
   "dependencies": [
-    "boost-unordered",
     "xxhash",
     "gtest"
   ]

@@ -11,7 +11,8 @@ add_executable(test-stringpool
         src/RaceTests.cpp
         src/CrossPool.cpp
         src/TestStatistics.cpp
-        src/VisitTests.cpp)
+        src/VisitTests.cpp
+        src/ToStringTests.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 

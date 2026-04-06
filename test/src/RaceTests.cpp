@@ -39,7 +39,7 @@ TEST(Race, InternShortConcat) {
     const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
     for (int i=0; i < threadCount; ++i)
         threads.emplace_back([&] {
-            constexpr auto bufferSize = 8;
+            constexpr auto bufferSize = 16;
             char buf[bufferSize] = {};
             for (int string = 0; string < INTERNS_PER_THREAD; ++string) {
                 snprintf(buf, bufferSize, "%d", string);
@@ -72,11 +72,11 @@ TEST(Race, InternLongConcat) {
     const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
     for (int i=0; i < threadCount; ++i)
         threads.emplace_back([&] {
+            // 19 periods
             const auto atomFormat = "%d...................";
-            constexpr auto bufferSize = 30;
+            constexpr auto bufferSize = 32;
             char buf[bufferSize] = {};
             for (int string = 0; string < INTERNS_PER_THREAD; ++string) {
-                // 19 periods
                 snprintf(buf, bufferSize, atomFormat, string);
                 pool.intern(buf);
             }

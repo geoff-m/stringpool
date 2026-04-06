@@ -3,7 +3,6 @@
 #include "include/pack_utils.h"
 #include <cassert>
 #include <cstring>
-#include <cstdlib>
 #include <stdexcept>
 
 using namespace stringpool;
@@ -15,7 +14,7 @@ pool::pool(size_t initial_table_capacity, size_t initial_data_capacity)
 }
 
 pool::pool()
-    : pool(128, 4096) {
+    : pool(32, 4096) {
 }
 
 pool::~pool() {
@@ -26,6 +25,7 @@ string_handle pool::intern(const char* string) {
     return intern(string, strlen(string));
 }
 
+// Attempts to intern the given string, or else return its handle if it already exists in the cache.
 pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_t size, bool haveWriterLock,
                                           string_handle& result) {
     auto it = table.find(hash);
@@ -78,7 +78,11 @@ string_handle pool::intern(const char* string, size_t size) {
     }
 }
 
-void pool::updateDataSizeUnsafe(size_t newSize) {
+string_handle pool::intern(std::string_view string) {
+    return intern(string.data(), string.size());
+}
+
+void pool::update_data_size_unsafe(size_t newSize) {
     if (newSize > dataCapacity) {
         const auto newDataCapacity = std::max(
             dataCapacity + (dataCapacity >> 1),
@@ -93,7 +97,7 @@ void pool::updateDataSizeUnsafe(size_t newSize) {
 char* pool::add_atom_unsafe(const char* string, size_t stringSize) {
     if (stringSize < 256) {
         const auto blockSize = 2 + stringSize;
-        updateDataSizeUnsafe(dataSize + blockSize);
+        update_data_size_unsafe(dataSize + blockSize);
         char* startOfAtom = data + dataSize - blockSize;
         startOfAtom[0] = static_cast<char>(EntryType::SHORT_ATOM);
         startOfAtom[offsets::short_atom::STRING_LENGTH] = static_cast<char>(stringSize);
@@ -101,7 +105,7 @@ char* pool::add_atom_unsafe(const char* string, size_t stringSize) {
         return startOfAtom;
     } else {
         const auto blockSize = 16 + stringSize;
-        updateDataSizeUnsafe(dataSize + blockSize);
+        update_data_size_unsafe(dataSize + blockSize);
         char* startOfAtom = data + dataSize - blockSize;
         if (stringSize != (stringSize & ~UPPER_1_MASK))
             std::abort(); // string is too large.
@@ -116,7 +120,7 @@ static void addToHash(const char* piece, size_t size, void* pHasher) {
     static_cast<hasher*>(pHasher)->add(piece, size);
 }
 
-string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_handle right) {
+string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_handle right) {
     const auto* leftEntry = left.owner->data + left.dataIndex;
     const auto* rightEntry = right.owner->data + right.dataIndex;
     const auto leftLength = unpackLength(leftEntry);
@@ -125,7 +129,7 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
     if (totalLength <= CONCAT_ENTRY_SIZE - ATOM_ENTRY_SIZE) {
         // We will store the concatenation as a single atom node.
         const auto blockSize = ATOM_ENTRY_SIZE + totalLength;
-        updateDataSizeUnsafe(dataSize + blockSize);
+        update_data_size_unsafe(dataSize + blockSize);
         char* startOfAtom = data + dataSize - blockSize;
         startOfAtom[0] = static_cast<char>(EntryType::ATOM);
         std::memcpy(startOfAtom + 1, &totalLength, 7);
@@ -140,7 +144,7 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
         const auto blockSize = CONCAT_ENTRY_SIZE;
-        updateDataSizeUnsafe(dataSize + blockSize);
+        update_data_size_unsafe(dataSize + blockSize);
         char* startOfConcat = data + dataSize - blockSize;
         const auto leftIsShort = leftLength <= 7;
         const auto rightIsShort = rightLength <= 7;
@@ -167,14 +171,15 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
     }
 }
 
-pool::InternResult pool::concat_helper_unsafe(size_t hash, string_handle left, string_handle right, bool haveWriterLock,
+// Attempts to intern the concatenation of the given string handles, or else return its handle if it already exists in the cache.
+pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, string_handle right, bool haveWriterLock,
                                               string_handle& result) {
     auto it = table.find(hash);
     if (it == table.end()) {
         // Nothing in table has this hash.
         if (!haveWriterLock)
             return InternResult::NeedWriterLock;
-        result = insertConcatUnsafe(hash, left, right);
+        result = add_concat_unsafe(hash, left, right);
         return InternResult::Success;
     }
     auto existingEntries = it->second;
@@ -186,7 +191,7 @@ pool::InternResult pool::concat_helper_unsafe(size_t hash, string_handle left, s
     }
     if (!haveWriterLock)
         return InternResult::NeedWriterLock;
-    result = insertConcatUnsafe(hash, left, right);
+    result = add_concat_unsafe(hash, left, right);
     return InternResult::Success;
 }
 
@@ -195,15 +200,15 @@ string_handle pool::concat(string_handle left, string_handle right) {
         throw std::invalid_argument("Concatenated strings must be owned by this string_pool");
     auto readLock = lock_for_reading(*this);
     hasher h;
-    left.visit_pieces(addToHash, &h);
-    right.visit_pieces(addToHash, &h);
+    left.visit_chunks(addToHash, &h);
+    right.visit_chunks(addToHash, &h);
     const auto hash = h.finish();
     string_handle result{};
-    auto readResult = concat_helper_unsafe(hash, left, right, false, result);
+    auto readResult = do_concat_unsafe(hash, left, right, false, result);
     if (readResult == InternResult::NeedWriterLock) {
         readLock.unlock();
         auto writeLock = lock_for_writing(*this);
-        auto writeResult = concat_helper_unsafe(hash, left, right, true, result);
+        auto writeResult = do_concat_unsafe(hash, left, right, true, result);
         assert(writeResult == InternResult::Success);
         return result;
     } else {

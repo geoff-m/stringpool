@@ -15,12 +15,10 @@ add_library(stringpool STATIC
 
 target_include_directories(stringpool PUBLIC include)
 
-find_package(Boost CONFIG REQUIRED COMPONENTS unordered)
 find_package(xxHash CONFIG REQUIRED)
 
 target_link_libraries(stringpool
-        PRIVATE xxHash::xxhash
-        PRIVATE Boost::unordered)
+        PRIVATE xxHash::xxhash)
 
 enable_testing()
 find_package(GTest CONFIG REQUIRED)

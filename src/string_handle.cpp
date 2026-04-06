@@ -70,12 +70,22 @@ size_t string_handle::hash() const {
     return h.finish();
 }
 
-void string_handle::visit_pieces(void (*callback)(const char* piece, size_t pieceSize, void* state), void* state) const {
+void string_handle::visit_chunks(void (*callback)(const char* piece, size_t pieceSize, void* state),
+                                 void* state) const {
     std::shared_lock lock(owner->tableRwMutex);
     tree_walker walker(*owner, dataIndex);
     char* piece;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
         callback(piece, pieceLength, state);
+    }
+}
+
+void string_handle::visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state) const {
+    std::shared_lock lock(owner->tableRwMutex);
+    tree_walker walker(*owner, dataIndex);
+    char* piece;
+    while (size_t pieceLength = walker.get_next_bytes(&piece)) {
+        callback({piece, pieceLength}, state);
     }
 }
 
@@ -223,6 +233,10 @@ bool string_handle::equals(const char* rhs, size_t length) const {
     return equals_unsafe(rhs, length);
 }
 
+bool string_handle::equals(std::string_view rhs) const {
+    return equals(rhs.data(), rhs.size());
+}
+
 bool string_handle::equals(const char* rhs) const {
     return equals(rhs, strlen(rhs));
 }
@@ -262,6 +276,13 @@ bool string_handle::equals(const string_handle& rhs) const {
             rightPieceIndex = 0;
         }
     }
+}
+
+std::string string_handle::to_string() const {
+    std::string ret;
+    ret.resize(size());
+    copy(ret.data(), size());
+    return ret;
 }
 
 bool string_handle::concat_equals_unsafe(string_handle single, string_handle left, string_handle right) {
