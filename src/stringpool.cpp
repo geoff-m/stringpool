@@ -90,16 +90,26 @@ void pool::updateDataSizeUnsafe(size_t newSize) {
     assert(dataCapacity >= newSize);
 }
 
-char* pool::add_atom_unsafe(const char* string, size_t size) {
-    const auto blockSize = 16 + size;
-    updateDataSizeUnsafe(dataSize + blockSize);
-    char* startOfAtom = data + dataSize - blockSize;
-    if (size != (size & ~UPPER_1_MASK))
-        std::abort(); // string is too large.
-    startOfAtom[0] = static_cast<char>(EntryType::ATOM);
-    std::memcpy(startOfAtom + 1, &size, 7);
-    std::memcpy(startOfAtom + offsets::atom::STRING_VALUE, string, size);
-    return startOfAtom;
+char* pool::add_atom_unsafe(const char* string, size_t stringSize) {
+    if (stringSize < 256) {
+        const auto blockSize = 2 + stringSize;
+        updateDataSizeUnsafe(dataSize + blockSize);
+        char* startOfAtom = data + dataSize - blockSize;
+        startOfAtom[0] = static_cast<char>(EntryType::SHORT_ATOM);
+        startOfAtom[offsets::short_atom::STRING_LENGTH] = static_cast<char>(stringSize);
+        std::memcpy(startOfAtom + offsets::short_atom::STRING_VALUE, string, stringSize);
+        return startOfAtom;
+    } else {
+        const auto blockSize = 16 + stringSize;
+        updateDataSizeUnsafe(dataSize + blockSize);
+        char* startOfAtom = data + dataSize - blockSize;
+        if (stringSize != (stringSize & ~UPPER_1_MASK))
+            std::abort(); // string is too large.
+        startOfAtom[0] = static_cast<char>(EntryType::ATOM);
+        std::memcpy(startOfAtom + offsets::atom::STRING_LENGTH, &stringSize, 7);
+        std::memcpy(startOfAtom + offsets::atom::STRING_VALUE, string, stringSize);
+        return startOfAtom;
+    }
 }
 
 static void addToHash(char* piece, size_t size, void* pHasher) {
@@ -138,14 +148,14 @@ string_handle pool::insertConcatUnsafe(size_t hash, string_handle left, string_h
         std::memcpy(startOfConcat + 1, &totalLength, 7);
         if (leftIsShort) {
             startOfConcat[offsets::concat::LEFT_PTR] = static_cast<char>(
-                (leftLength << 4) | static_cast<char>(EntryType::SHORT_STRING));
+                (leftLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
             left.copy_unsafe(startOfConcat + offsets::concat::LEFT_PTR + 1, 7);
         } else {
             std::memcpy(startOfConcat + offsets::concat::LEFT_PTR, &left.dataIndex, 8);
         }
         if (rightIsShort) {
             startOfConcat[offsets::concat::RIGHT_PTR] = static_cast<char>(
-                (rightLength << 4) | static_cast<char>(EntryType::SHORT_STRING));
+                (rightLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
             right.copy_unsafe(startOfConcat + offsets::concat::RIGHT_PTR + 1, 7);
         } else {
             std::memcpy(startOfConcat + offsets::concat::RIGHT_PTR, &right.dataIndex, 8);

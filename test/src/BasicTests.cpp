@@ -40,6 +40,16 @@ TEST(Basic, DedupEmpty) {
     expectEqual(interned, string);
 }
 
+TEST(Basic, AtomLengths) {
+    pool p;
+    for (long length = 1; length < 1024 * 1024; length <<= 1) {
+        auto s = std::string(length, 'a');
+        const auto interned = p.intern(s.c_str());
+        expectEqual(interned, s.c_str());
+        expectLength(length, interned);
+    }
+}
+
 TEST(Basic, Concat1Plus1) {
     pool p;
     auto ia = p.intern("a");
@@ -128,10 +138,10 @@ TEST(Basic, CopyConcatLongLong) {
 TEST(Basic, CopyConcatAtomConcatLongLong) {
     pool p;
     auto a = p.concat(
-    p.intern("a"),
-    p.concat(
-        p.intern("leaf0123456789"),
-        p.intern("leaf9876543210")));
+        p.intern("a"),
+        p.concat(
+            p.intern("leaf0123456789"),
+            p.intern("leaf9876543210")));
     constexpr auto len = 64;
     char buf[len] = {};
     a.copy(buf, len);
@@ -142,11 +152,29 @@ TEST(Basic, CopyConcatConcatLongLongAtom) {
     pool p;
     auto a = p.concat(
         p.concat(
-        p.intern("leaf0123456789"),
-        p.intern("leaf9876543210")),
+            p.intern("leaf0123456789"),
+            p.intern("leaf9876543210")),
         p.intern("a"));
     constexpr auto len = 64;
     char buf[len] = {};
     a.copy(buf, len);
     EXPECT_STREQ("leaf0123456789leaf9876543210a", buf);
+}
+
+TEST(Basic, CopyToZeroSizeDestination) {
+    pool p;
+    auto s = p.intern("abc");
+    char c = 'x';
+    const auto copiedLength = s.copy(&c, 0);
+    EXPECT_EQ(0, copiedLength);
+    EXPECT_EQ('x', c);
+}
+
+TEST(Basic, CopyFromZeroSizeSource) {
+    pool p;
+    auto s = p.intern("");
+    char c = 'x';
+    const auto copiedLength = s.copy(&c, s.length());
+    EXPECT_EQ(0, copiedLength);
+    EXPECT_EQ('x', c);
 }

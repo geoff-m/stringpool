@@ -226,7 +226,7 @@ namespace stringpool {
         }
 
         // These functions are not thread-safe.
-        char* add_atom_unsafe(const char* string, size_t size);
+        char* add_atom_unsafe(const char* string, size_t stringSize);
 
         string_handle insertConcatUnsafe(size_t hash, string_handle left, string_handle right);
 

@@ -9,10 +9,6 @@ size_t hasher::hash(const char* string, size_t length) {
     return XXH64(string, length, 0x7448652047614D65);
 }
 
-size_t hasher::hash(const char* string) {
-    return hash(string, strlen(string));
-}
-
 void abortOnError(XXH_errorcode ec) {
     if (ec == XXH_ERROR)
         std::abort();

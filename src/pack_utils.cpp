@@ -1,4 +1,7 @@
 #include "include/pack_utils.h"
+#include "stringpool/stringpool.h"
+#include <cassert>
+#include <cstdlib>
 
 using namespace stringpool;
 
@@ -8,25 +11,33 @@ using namespace stringpool;
 
 [[nodiscard]] bool isConcat(const char* node) {
     const auto type = unpack_node_type(node);
-    return type > EntryType::SHORT_STRING;
-}
-
-[[nodiscard]] bool isShortConcatChild(const char* node) {
-    return unpack_node_type(node) == EntryType::SHORT_STRING;
+    return type > EntryType::SHORT_CONCAT_CHILD;
 }
 
 [[nodiscard]] size_t unpackLength(const char* node) {
-    if (isShortConcatChild(node))
-        return node[offsets::ENTRY_TYPE_STRING_LENGTH] >> 4;
-    const auto ret = reinterpret_cast<const uint64_t*>(node)[offsets::ENTRY_TYPE_STRING_LENGTH] >> 8;
-    return ret;
+    const auto nodeType = unpack_node_type(node);
+    switch (nodeType) {
+        case EntryType::SHORT_CONCAT_CHILD:
+            return node[offsets::ENTRY_TYPE_STRING_LENGTH] >> 4;
+        case EntryType::SHORT_ATOM:
+            return static_cast<unsigned char>(node[offsets::short_atom::STRING_LENGTH]);
+        default:
+            return reinterpret_cast<const uint64_t*>(node)[offsets::ENTRY_TYPE_STRING_LENGTH] >> 8;
+    }
 }
 
 [[nodiscard]] char* unpackStringFromLeaf(char* node) {
-    if (isShortConcatChild(node))
-        return node + 1;
-    assert(unpack_node_type(node) == EntryType::ATOM);
-    return node + offsets::atom::STRING_VALUE;
+    const auto nodeType = unpack_node_type(node);
+    switch (nodeType) {
+        case EntryType::SHORT_CONCAT_CHILD:
+            return node + 1;
+        case EntryType::ATOM:
+            return node + offsets::atom::STRING_VALUE;
+        case EntryType::SHORT_ATOM:
+            return node + offsets::short_atom::STRING_VALUE;
+        default:
+            std::abort(); // should be unreachable
+    }
 }
 
 [[nodiscard]] size_t unpackLeftChild(char* base, size_t concatNodeIndex) {
@@ -52,7 +63,7 @@ using namespace stringpool;
         return EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY;
     if (leftIsShort && !rightIsShort)
         return EntryType::CONCAT_LEFT_SHORT_RIGHT_ENTRY;
-    if (!leftIsShort && rightIsShort)
+    if (!leftIsShort)
         return EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT;
     return EntryType::CONCAT_LEFT_SHORT_RIGHT_SHORT;
 }

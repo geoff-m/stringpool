@@ -98,7 +98,7 @@ int string_handle::strcmp(const char* rhs) const {
 
 int string_handle::strcmp(const string_handle& rhs) const {
     auto lock = pool::lock_for_reading(*owner, *rhs.owner);
-    if (&owner == &rhs.owner && dataIndex == rhs.dataIndex)
+    if (owner == rhs.owner && dataIndex == rhs.dataIndex)
         return 0;
     tree_walker leftWalker(*owner, dataIndex);
     tree_walker rightWalker(*rhs.owner, rhs.dataIndex);
@@ -138,7 +138,7 @@ int string_handle::strcmp(const string_handle& rhs) const {
 
 int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     auto lock = pool::lock_for_reading(*owner, *rhs.owner);
-    if (&owner == &rhs.owner && dataIndex == rhs.dataIndex)
+    if (owner == rhs.owner && dataIndex == rhs.dataIndex)
         return 0;
     auto* leftEntry = owner->data + dataIndex;
     auto* rightEntry = rhs.owner->data + rhs.dataIndex;
@@ -186,7 +186,6 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     size_t iterations = 0;
     while (charsCompared < length) {
         ++iterations;
-        assert(iterations < 10);
         if (pieceLength == 0) {
             std::string msg = "Length argument of ";
             msg += std::to_string(length);
@@ -265,7 +264,6 @@ bool string_handle::equals(const string_handle& rhs) const {
     }
 }
 
-
 bool string_handle::concat_equals_unsafe(string_handle single, string_handle left, string_handle right) {
     auto* singleEntry = single.owner->data + single.dataIndex;
     auto* leftEntry = left.owner->data + left.dataIndex;
@@ -316,7 +314,8 @@ bool string_handle::concat_equals_unsafe(string_handle single, string_handle lef
 
 size_t string_handle::size() const {
     auto lock = pool::lock_for_reading(*owner);
-    return unpackLength(owner->data + dataIndex);
+    auto ret = unpackLength(owner->data + dataIndex);
+    return ret;
 }
 
 size_t string_handle::length() const {

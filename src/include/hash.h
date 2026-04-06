@@ -11,8 +11,6 @@ namespace stringpool {
 
         [[nodiscard]] static size_t hash(const char* string, size_t length);
 
-        [[nodiscard]] static size_t hash(const char* string);
-
         void add(const char* data, size_t length);
 
         size_t finish();

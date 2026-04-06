@@ -1,18 +1,15 @@
 #pragma once
-#include "stringpool/stringpool.h"
-#include <cassert>
-#include <cstring>
-#include <cstdlib>
-#include <stdexcept>
-
+#include <cstddef>
+#include <cstdint>
 
 enum class EntryType : uint8_t {
     ATOM = 0,
-    SHORT_STRING = 1,
-    CONCAT_LEFT_ENTRY_RIGHT_ENTRY = 2,
-    CONCAT_LEFT_ENTRY_RIGHT_SHORT = 3,
-    CONCAT_LEFT_SHORT_RIGHT_ENTRY = 4,
-    CONCAT_LEFT_SHORT_RIGHT_SHORT = 5,
+    SHORT_ATOM = 1,
+    SHORT_CONCAT_CHILD = 2,
+    CONCAT_LEFT_ENTRY_RIGHT_ENTRY = 3,
+    CONCAT_LEFT_ENTRY_RIGHT_SHORT = 4,
+    CONCAT_LEFT_SHORT_RIGHT_ENTRY = 5,
+    CONCAT_LEFT_SHORT_RIGHT_SHORT = 6,
 };
 
 constexpr uint64_t UPPER_7_MASK = 0xffffffffffffff00;
@@ -28,7 +25,13 @@ namespace offsets {
     constexpr int ENTRY_TYPE_STRING_LENGTH = 0;
 
     namespace atom {
+        constexpr int STRING_LENGTH = 1;
         constexpr int STRING_VALUE = 8;
+    }
+
+    namespace short_atom {
+        constexpr int STRING_LENGTH = 1;
+        constexpr int STRING_VALUE = 2;
     }
 
     namespace concat {
@@ -45,8 +48,6 @@ namespace offsets {
 [[nodiscard]] EntryType unpack_node_type(const char* node);
 
 [[nodiscard]] bool isConcat(const char* node);
-
-[[nodiscard]] bool isShortConcatChild(const char* node);
 
 [[nodiscard]] size_t unpackLength(const char* node);
 

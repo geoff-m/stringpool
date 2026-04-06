@@ -29,6 +29,10 @@ void testMemcmp(const char* string1, const char* string2, size_t length) {
     expectMemcmp(expectedComparison, string1, interned2, length);
 }
 
+TEST(Memcmp, Self) {
+    testMemcmp("abc", "abc", 3);
+}
+
 TEST(Memcmp, Length1_14) {
     testMemcmp("a", "leaf0123456789", 1);
 }
