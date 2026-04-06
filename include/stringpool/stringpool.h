@@ -8,16 +8,7 @@
 #include <unordered_map>
 
 namespace stringpool {
-    // struct allocator {
-    //     char* allocate(size_t size);
-    //
-    //     void deallocate(char* ptr, size_t size);
-    //
-    //     char* reallocate(char* ptr, size_t oldSize, size_t newSize);
-    // };
-
     class pool;
-
     class string_handle {
         friend class pool;
         pool* owner;
