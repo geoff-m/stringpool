@@ -112,7 +112,7 @@ char* pool::add_atom_unsafe(const char* string, size_t stringSize) {
     }
 }
 
-static void addToHash(char* piece, size_t size, void* pHasher) {
+static void addToHash(const char* piece, size_t size, void* pHasher) {
     static_cast<hasher*>(pHasher)->add(piece, size);
 }
 
@@ -193,7 +193,6 @@ pool::InternResult pool::concat_helper_unsafe(size_t hash, string_handle left, s
 string_handle pool::concat(string_handle left, string_handle right) {
     if (left.owner != this || right.owner != this)
         throw std::invalid_argument("Concatenated strings must be owned by this string_pool");
-
     auto readLock = lock_for_reading(*this);
     hasher h;
     left.visit_pieces(addToHash, &h);

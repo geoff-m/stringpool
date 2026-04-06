@@ -70,7 +70,7 @@ size_t string_handle::hash() const {
     return h.finish();
 }
 
-void string_handle::visit_pieces(void (*callback)(char* piece, size_t pieceSize, void* state), void* state) const {
+void string_handle::visit_pieces(void (*callback)(const char* piece, size_t pieceSize, void* state), void* state) const {
     std::shared_lock lock(owner->tableRwMutex);
     tree_walker walker(*owner, dataIndex);
     char* piece;

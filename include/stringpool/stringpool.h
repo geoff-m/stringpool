@@ -50,7 +50,7 @@ namespace stringpool {
 
         [[nodiscard]] int memcmp_unsafe(const char* rhs, size_t length) const;
     public:
-        void visit_pieces(void (*callback)(char* piece, size_t pieceSize, void* state), void* state) const;
+        void visit_pieces(void (*callback)(const char* piece, size_t pieceSize, void* state), void* state) const;
 
         [[nodiscard]] size_t size() const;
 
@@ -96,7 +96,6 @@ namespace stringpool {
          * @return True if and only if the strings are equal.
          */
         [[nodiscard]] bool equals(const char* rhs, size_t length) const;
-
 
         /**
          * Compares this string with the given one.
