@@ -15,7 +15,8 @@ add_library(stringpool STATIC
         src/statistics.cpp
         src/string_handle.cpp
         src/pack_utils.cpp
-        src/include/pack_utils.h)
+        src/include/pack_utils.h
+        src/char_iterator.cpp)
 
 if (STRINGPOOL_TRACK_OWNERS)
     target_compile_definitions(stringpool PUBLIC STRINGPOOL_TRACK_OWNERS=1)

@@ -7,6 +7,8 @@
 #include <string>
 #include <unordered_map>
 #include <vector>
+#include <iterator>
+
 
 namespace stringpool {
     class pool;
@@ -31,14 +33,51 @@ namespace stringpool {
             std::deque<const char*> toVisit;
 
         public:
+            tree_walker();
             tree_walker(const char* root);
 
             [[nodiscard]] size_t get_next_bytes(const char** bytes);
+
+            [[nodiscard]] bool operator==(const tree_walker&) const = default;
         };
 
         [[nodiscard]] static bool concat_equals(string_handle single, string_handle left, string_handle right);
 
+        class char_iterator
+        {
+            tree_walker walker;
+            const char* chunk;
+            size_t chunkSize;
+            size_t indexInChunk;
+        public:
+            using value_type = char;
+            using difference_type = std::ptrdiff_t;
+
+            char_iterator();
+            char_iterator(const string_handle& sh);
+            char_iterator(const char_iterator&) = default;
+
+            char_iterator& operator=(const char_iterator&) = default;
+
+            [[nodiscard]] value_type operator*() const;
+
+            char_iterator& operator++();
+
+            char_iterator operator++(int)
+            {
+                auto tmp = *this;
+                ++*this;
+                return tmp;
+            }
+
+            [[nodiscard]] bool operator==(const char_iterator& other) const;
+            [[nodiscard]] bool operator!=(const char_iterator& other) const;
+        };
+        static_assert(std::forward_iterator<char_iterator>);
+
     public:
+        [[nodiscard]] char_iterator begin() const;
+        [[nodiscard]] char_iterator end() const;
 
         /**
          * Gets the length of the string represented by this instance.
