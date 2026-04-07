@@ -26,7 +26,7 @@ using namespace stringpool;
     }
 }
 
-[[nodiscard]] char* unpackStringFromLeaf(char* node) {
+[[nodiscard]] const char* unpackStringFromLeaf(const char* node) {
     const auto nodeType = unpack_node_type(node);
     switch (nodeType) {
         case EntryType::SHORT_CONCAT_CHILD:
@@ -40,22 +40,22 @@ using namespace stringpool;
     }
 }
 
-[[nodiscard]] size_t unpackLeftChild(char* base, size_t concatNodeIndex) {
-    auto* child = base + concatNodeIndex + offsets::concat::LEFT_PTR;
-    const auto type = unpack_node_type(base + concatNodeIndex);
+[[nodiscard]] const char* unpackLeftChild(const char* concatNode) {
+    auto* child = concatNode + offsets::concat::LEFT_PTR;
+    const auto type = unpack_node_type( concatNode);
     if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT || type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY) {
-        return *reinterpret_cast<size_t*>(child);
+        return *reinterpret_cast<const char* const*>(child);
     }
-    return concatNodeIndex + offsets::concat::LEFT_PTR;
+    return concatNode + offsets::concat::LEFT_PTR;
 }
 
-[[nodiscard]] size_t unpackRightChild(char* base, size_t concatNodeIndex) {
-    auto* child = base + concatNodeIndex + offsets::concat::RIGHT_PTR;
-    const auto type = unpack_node_type(base + concatNodeIndex);
+[[nodiscard]] const char* unpackRightChild(const char* concatNode) {
+    auto* child = concatNode + offsets::concat::RIGHT_PTR;
+    const auto type = unpack_node_type(concatNode);
     if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY || type == EntryType::CONCAT_LEFT_SHORT_RIGHT_ENTRY) {
-        return *reinterpret_cast<size_t*>(child);
+        return *reinterpret_cast<const char* const*>(child);
     }
-    return concatNodeIndex + offsets::concat::RIGHT_PTR;
+    return concatNode + offsets::concat::RIGHT_PTR;
 }
 
 [[nodiscard]] EntryType makeConcatType(bool leftIsShort, bool rightIsShort) {

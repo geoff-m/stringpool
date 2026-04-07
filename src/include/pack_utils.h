@@ -51,12 +51,12 @@ namespace offsets {
 
 [[nodiscard]] size_t unpackLength(const char* node);
 
-[[nodiscard]] char* unpackStringFromLeaf(char* node);
+[[nodiscard]] const char* unpackStringFromLeaf(const char* node);
 
 // Returns true iff the child is a leaf.
-[[nodiscard]] size_t unpackLeftChild(char* base, size_t concatNodeIndex);
+[[nodiscard]] const char* unpackLeftChild(const char* concatNode);
 
 // Returns true iff the child is a leaf.
-[[nodiscard]] size_t unpackRightChild(char* base, size_t concatNodeIndex);
+[[nodiscard]] const char* unpackRightChild(const char* concatNode);
 
 [[nodiscard]] EntryType makeConcatType(bool leftIsShort, bool rightIsShort);

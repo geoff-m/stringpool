@@ -15,7 +15,7 @@ TEST(Race, InternShortAtom) {
     skipIfNoParallelism();
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
-    pool pool(1000, 10);
+    pool pool(1000);
     const auto threadCount = std::thread::hardware_concurrency();
     for (int i=0; i < threadCount; ++i)
         threads.emplace_back([&] {
@@ -34,7 +34,7 @@ TEST(Race, InternShortConcat) {
     skipIfNoParallelism();
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
-    pool pool(1000, 10);
+    pool pool(1000);
     const auto threadCount = std::thread::hardware_concurrency();
     const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
     for (int i=0; i < threadCount; ++i)
@@ -67,7 +67,7 @@ TEST(Race, InternLongConcat) {
     skipIfNoParallelism();
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
-    pool pool(1000, 10);
+    pool pool(1000);
     const auto threadCount = std::min(4u, std::thread::hardware_concurrency());
     const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
     for (int i=0; i < threadCount; ++i)

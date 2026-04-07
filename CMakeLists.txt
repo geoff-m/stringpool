@@ -3,6 +3,10 @@ project(stringpool)
 include(cmake/asan.cmake)
 set(CMAKE_CXX_STANDARD 20)
 
+option(STRINGPOOL_TRACK_OWNERS
+        "Whether stringpool should report an error on attempting to concatenate two strings from different pools"
+        ON)
+
 add_library(stringpool STATIC
         src/stringpool.cpp
         include/stringpool/stringpool.h
@@ -12,6 +16,10 @@ add_library(stringpool STATIC
         src/string_handle.cpp
         src/pack_utils.cpp
         src/include/pack_utils.h)
+
+if (STRINGPOOL_TRACK_OWNERS)
+    target_compile_definitions(stringpool PUBLIC STRINGPOOL_TRACK_OWNERS=1)
+endif ()
 
 target_include_directories(stringpool PUBLIC include)
 

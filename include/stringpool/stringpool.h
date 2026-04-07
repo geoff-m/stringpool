@@ -6,41 +6,38 @@
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 namespace stringpool {
     class pool;
     class string_handle {
         friend class pool;
-        pool* owner;
-        size_t dataIndex;
+        const char* data;
 
-        string_handle(pool* owner, size_t dataIndex);
+#ifdef STRINGPOOL_TRACK_OWNERS
+        pool* owner;
+        string_handle(const char* data, pool* owner);
+#else
+        string_handle(const char* data);
+#endif
 
         string_handle() = default;
 
         class tree_walker {
             // We assume this won't change during the lifetime of this object.
             // This is currently upheld by users of this class.
-            char* baseAddress;
+            const char* root;
 
-            size_t rootIndex;
-            std::deque<size_t> toVisit;
+            std::deque<const char*> toVisit;
 
         public:
-            tree_walker(const pool& owner, size_t rootIndex);
+            tree_walker(const char* root);
 
-            tree_walker(char* baseAddress, size_t rootIndex);
-
-            [[nodiscard]] size_t get_next_bytes(char** bytes);
+            [[nodiscard]] size_t get_next_bytes(const char** bytes);
         };
 
-        [[nodiscard]] static bool concat_equals_unsafe(string_handle single, string_handle left, string_handle right);
+        [[nodiscard]] static bool concat_equals(string_handle single, string_handle left, string_handle right);
 
-        size_t copy_unsafe(char* destination, size_t destination_size) const;
-
-        [[nodiscard]] bool equals_unsafe(const char* rhs, size_t length) const;
-
-        [[nodiscard]] int memcmp_unsafe(const char* rhs, size_t length) const;
     public:
 
         /**
@@ -151,15 +148,14 @@ namespace stringpool {
     };
 
     class pool {
-        char* data;
-        size_t dataSize = 0;
-        size_t dataCapacity;
+        std::vector<char*> data;
+        size_t totalDataSize = 0;
+
+        [[nodiscard]] char* add_buffer(size_t size);
         friend class string_handle;
 
         // Prevents concurrent changes to table contents.
         std::shared_mutex tableRwMutex;
-
-        void update_data_size_unsafe(size_t newSize);
 
         // key: hash
         // value: list of strings having that hash
@@ -297,9 +293,8 @@ namespace stringpool {
         /**
          * Creates a new stringpool.
          * @param initial_table_capacity Initial capacity of the internal table, which has one entry for each interned string.
-         * @param initial_data_capacity Initial capacity of the internal data buffer, which stores string contents.
          */
-        pool(size_t initial_table_capacity, size_t initial_data_capacity);
+        pool(size_t initial_table_capacity);
 
         /**
          * Creates a new stringpool.

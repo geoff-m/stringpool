@@ -7,18 +7,17 @@
 
 using namespace stringpool;
 
-pool::pool(size_t initial_table_capacity, size_t initial_data_capacity)
-    : data(static_cast<char*>(std::calloc(initial_data_capacity, 1))),
-      dataCapacity(initial_data_capacity) {
+pool::pool(size_t initial_table_capacity) {
     table.reserve(initial_table_capacity);
 }
 
 pool::pool()
-    : pool(32, 4096) {
+    : pool(32) {
 }
 
 pool::~pool() {
-    std::free(data);
+    for (auto* buffer : data)
+        delete[] buffer;
 }
 
 string_handle pool::intern(const char* string) {
@@ -32,7 +31,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     if (it != table.end()) {
         auto existingEntries = it->second;
         for (string_handle existingEntry : existingEntries) {
-            if (existingEntry.equals_unsafe(string, size)) {
+            if (existingEntry.equals(string, size)) {
                 result = existingEntry;
                 ++internHits;
                 return InternResult::Success;
@@ -41,7 +40,11 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         if (!haveWriterLock)
             return InternResult::NeedWriterLock;
         char* atom = add_atom_unsafe(string, size);
-        string_handle ret(this, atom - data);
+#ifdef STRINGPOOL_TRACK_OWNERS
+        string_handle ret(atom, this);
+#else
+        string_handle ret(atom);
+#endif
         existingEntries.push_back(ret);
         result = ret;
         ++internMisses;
@@ -52,7 +55,11 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         return InternResult::NeedWriterLock;
     char* atom = add_atom_unsafe(string, size);
     auto r = table.emplace(hash, std::list<string_handle>());
-    string_handle ret(this, atom - data);
+#ifdef STRINGPOOL_TRACK_OWNERS
+    string_handle ret(atom, this);
+#else
+    string_handle ret(atom);
+#endif
     r.first->second.push_back(ret);
     result = ret;
     ++internMisses;
@@ -82,31 +89,24 @@ string_handle pool::intern(std::string_view string) {
     return intern(string.data(), string.size());
 }
 
-void pool::update_data_size_unsafe(size_t newSize) {
-    if (newSize > dataCapacity) {
-        const auto newDataCapacity = std::max(
-            dataCapacity + (dataCapacity >> 1),
-            dataCapacity + (newSize - dataCapacity) * 2);
-        dataCapacity = newDataCapacity;
-        data = static_cast<char*>(std::realloc(data, dataCapacity));
-    }
-    dataSize = newSize;
-    assert(dataCapacity >= newSize);
+char* pool::add_buffer(size_t size) {
+    auto* ret = new char[size];
+    data.emplace_back(ret);
+    totalDataSize += size;
+    return ret;
 }
 
 char* pool::add_atom_unsafe(const char* string, size_t stringSize) {
     if (stringSize < 256) {
         const auto blockSize = 2 + stringSize;
-        update_data_size_unsafe(dataSize + blockSize);
-        char* startOfAtom = data + dataSize - blockSize;
+        char* startOfAtom = add_buffer(blockSize);
         startOfAtom[0] = static_cast<char>(EntryType::SHORT_ATOM);
         startOfAtom[offsets::short_atom::STRING_LENGTH] = static_cast<char>(stringSize);
         std::memcpy(startOfAtom + offsets::short_atom::STRING_VALUE, string, stringSize);
         return startOfAtom;
     } else {
         const auto blockSize = 16 + stringSize;
-        update_data_size_unsafe(dataSize + blockSize);
-        char* startOfAtom = data + dataSize - blockSize;
+        char* startOfAtom = add_buffer(blockSize);
         if (stringSize != (stringSize & ~UPPER_1_MASK))
             std::abort(); // string is too large.
         startOfAtom[0] = static_cast<char>(EntryType::ATOM);
@@ -121,22 +121,25 @@ static void addToHash(const char* piece, size_t size, void* pHasher) {
 }
 
 string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_handle right) {
-    const auto* leftEntry = left.owner->data + left.dataIndex;
-    const auto* rightEntry = right.owner->data + right.dataIndex;
+    const auto* leftEntry = left.data;
+    const auto* rightEntry = right.data;
     const auto leftLength = unpackLength(leftEntry);
     const auto rightLength = unpackLength(rightEntry);
     const auto totalLength = leftLength + rightLength;
     if (totalLength <= CONCAT_ENTRY_SIZE - ATOM_ENTRY_SIZE) {
         // We will store the concatenation as a single atom node.
         const auto blockSize = ATOM_ENTRY_SIZE + totalLength;
-        update_data_size_unsafe(dataSize + blockSize);
-        char* startOfAtom = data + dataSize - blockSize;
+        char* startOfAtom = add_buffer(blockSize);
         startOfAtom[0] = static_cast<char>(EntryType::ATOM);
         std::memcpy(startOfAtom + 1, &totalLength, 7);
-        left.copy_unsafe(startOfAtom + offsets::atom::STRING_VALUE, leftLength);
-        right.copy_unsafe(startOfAtom + offsets::atom::STRING_VALUE + leftLength, rightLength);
+        left.copy(startOfAtom + offsets::atom::STRING_VALUE, leftLength);
+        right.copy(startOfAtom + offsets::atom::STRING_VALUE + leftLength, rightLength);
         auto r = table.emplace(hash, std::list<string_handle>());
-        string_handle ret(this, startOfAtom - data);
+#ifdef STRINGPOOL_TRACK_OWNERS
+        string_handle ret(startOfAtom, this);
+#else
+        string_handle ret(startOfAtom);
+#endif
         r.first->second.push_back(ret);
         return ret;
     } else {
@@ -144,8 +147,7 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
         const auto blockSize = CONCAT_ENTRY_SIZE;
-        update_data_size_unsafe(dataSize + blockSize);
-        char* startOfConcat = data + dataSize - blockSize;
+        char* startOfConcat = add_buffer(blockSize);
         const auto leftIsShort = leftLength <= 7;
         const auto rightIsShort = rightLength <= 7;
         startOfConcat[0] = static_cast<char>(makeConcatType(leftIsShort, rightIsShort));
@@ -153,19 +155,23 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
         if (leftIsShort) {
             startOfConcat[offsets::concat::LEFT_PTR] = static_cast<char>(
                 (leftLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
-            left.copy_unsafe(startOfConcat + offsets::concat::LEFT_PTR + 1, 7);
+            left.copy(startOfConcat + offsets::concat::LEFT_PTR + 1, 7);
         } else {
-            std::memcpy(startOfConcat + offsets::concat::LEFT_PTR, &left.dataIndex, 8);
+            std::memcpy(startOfConcat + offsets::concat::LEFT_PTR, &left.data, 8);
         }
         if (rightIsShort) {
             startOfConcat[offsets::concat::RIGHT_PTR] = static_cast<char>(
                 (rightLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
-            right.copy_unsafe(startOfConcat + offsets::concat::RIGHT_PTR + 1, 7);
+            right.copy(startOfConcat + offsets::concat::RIGHT_PTR + 1, 7);
         } else {
-            std::memcpy(startOfConcat + offsets::concat::RIGHT_PTR, &right.dataIndex, 8);
+            std::memcpy(startOfConcat + offsets::concat::RIGHT_PTR, &right.data, 8);
         }
         auto r = table.emplace(hash, std::list<string_handle>());
-        string_handle ret(this, startOfConcat - data);
+#ifdef STRINGPOOL_TRACK_OWNERS
+        string_handle ret(startOfConcat, this);
+#else
+        string_handle ret(startOfConcat);
+#endif
         r.first->second.push_back(ret);
         return ret;
     }
@@ -173,7 +179,7 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
 
 // Attempts to intern the concatenation of the given string handles, or else return its handle if it already exists in the cache.
 pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, string_handle right, bool haveWriterLock,
-                                              string_handle& result) {
+                                          string_handle& result) {
     auto it = table.find(hash);
     if (it == table.end()) {
         // Nothing in table has this hash.
@@ -184,7 +190,7 @@ pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, strin
     }
     auto existingEntries = it->second;
     for (string_handle existingEntry : existingEntries) {
-        if (string_handle::concat_equals_unsafe(existingEntry, left, right)) {
+        if (string_handle::concat_equals(existingEntry, left, right)) {
             result = existingEntry;
             return InternResult::Success;
         }
@@ -196,8 +202,10 @@ pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, strin
 }
 
 string_handle pool::concat(string_handle left, string_handle right) {
+#ifdef STRINGPOOL_TRACK_OWNERS
     if (left.owner != this || right.owner != this)
-        throw std::invalid_argument("Concatenated strings must be owned by this string_pool");
+        throw std::invalid_argument("Both strings for concatenation must belong to this pool instance");
+#endif
     auto readLock = lock_for_reading(*this);
     hasher h;
     left.visit_chunks(addToHash, &h);

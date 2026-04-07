@@ -8,41 +8,43 @@
 
 using namespace stringpool;
 
-string_handle::string_handle(pool* owner, size_t dataIndex)
-    : owner(owner), dataIndex(dataIndex) {
+#ifdef STRINGPOOL_TRACK_OWNERS
+string_handle::string_handle(const char* data, pool* owner)
+    : data(data), owner(owner){
+}
+#else
+string_handle::string_handle(const char* data)
+    : data(data) {
 }
 
-string_handle::tree_walker::tree_walker(const pool& owner, size_t rootIndex) : tree_walker(owner.data, rootIndex) {
+#endif
+
+string_handle::tree_walker::tree_walker(const char* root)
+    : root(root){
+    toVisit.emplace_back(root);
 }
 
-string_handle::tree_walker::tree_walker(char* baseAddress, size_t rootIndex)
-    : baseAddress(baseAddress),
-      rootIndex(rootIndex) {
-    toVisit.emplace_back(rootIndex);
-}
-
-
-size_t string_handle::tree_walker::get_next_bytes(char** bytes) {
+size_t string_handle::tree_walker::get_next_bytes(const char** bytes) {
     if (toVisit.empty())
         return 0;
-    size_t current = toVisit.back();
+    auto* current = toVisit.back();
     toVisit.pop_back();
-    while (isConcat(baseAddress + current)) {
-        const auto rightChildIndex = unpackRightChild(baseAddress, current);
-        const auto leftChildIndex = unpackLeftChild(baseAddress, current);
-        toVisit.emplace_back(rightChildIndex);
-        current = leftChildIndex;
+    while (isConcat( current)) {
+        const auto rightChild = unpackRightChild(current);
+        const auto leftChild = unpackLeftChild(current);
+        toVisit.emplace_back(rightChild);
+        current = leftChild;
     }
-    *bytes = unpackStringFromLeaf(baseAddress + current);
-    return unpackLength(baseAddress + current);
+    *bytes = unpackStringFromLeaf(current);
+    return unpackLength( current);
 }
 
-size_t string_handle::copy_unsafe(char* destination, size_t destination_size) const {
+size_t string_handle::copy(char* destination, size_t destination_size) const {
     if (destination_size == 0)
         return 0;
-    tree_walker walker(*owner, dataIndex);
+    tree_walker walker(data);
     size_t copiedSoFar = 0;
-    char* piece;
+    const char* piece;
     size_t pieceLength;
     while (copiedSoFar < destination_size && 0 != (pieceLength = walker.get_next_bytes(&piece))) {
         const auto copyNow = std::min(pieceLength, destination_size - copiedSoFar);
@@ -52,18 +54,10 @@ size_t string_handle::copy_unsafe(char* destination, size_t destination_size) co
     return copiedSoFar;
 }
 
-size_t string_handle::copy(char* destination, size_t destination_size) const {
-    if (destination_size == 0)
-        return 0;
-    std::shared_lock lock(owner->tableRwMutex);
-    return copy_unsafe(destination, destination_size);
-}
-
 size_t string_handle::hash() const {
     hasher h;
-    std::shared_lock lock(owner->tableRwMutex);
-    tree_walker walker(*owner, dataIndex);
-    char* piece;
+    tree_walker walker(data);
+    const char* piece;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
         h.add(piece, pieceLength);
     }
@@ -72,18 +66,16 @@ size_t string_handle::hash() const {
 
 void string_handle::visit_chunks(void (*callback)(const char* piece, size_t pieceSize, void* state),
                                  void* state) const {
-    std::shared_lock lock(owner->tableRwMutex);
-    tree_walker walker(*owner, dataIndex);
-    char* piece;
+    tree_walker walker(data);
+    const char* piece;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
         callback(piece, pieceLength, state);
     }
 }
 
 void string_handle::visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state) const {
-    std::shared_lock lock(owner->tableRwMutex);
-    tree_walker walker(*owner, dataIndex);
-    char* piece;
+    tree_walker walker(data);
+    const char* piece;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
         callback({piece, pieceLength}, state);
     }
@@ -91,9 +83,8 @@ void string_handle::visit_chunks(void (*callback)(std::string_view chunk, void* 
 
 // Assumes rhs is null-terminated.
 int string_handle::strcmp(const char* rhs) const {
-    std::shared_lock lock(owner->tableRwMutex);
-    tree_walker walker(*owner, dataIndex);
-    char* piece;
+    tree_walker walker(data);
+    const char* piece;
     size_t comparedChars = 0;
     while (size_t pieceLength = walker.get_next_bytes(&piece)) {
         const auto thisResult = std::strncmp(piece, rhs + comparedChars, pieceLength);
@@ -107,13 +98,12 @@ int string_handle::strcmp(const char* rhs) const {
 }
 
 int string_handle::strcmp(const string_handle& rhs) const {
-    auto lock = pool::lock_for_reading(*owner, *rhs.owner);
-    if (owner == rhs.owner && dataIndex == rhs.dataIndex)
+    if (data == rhs.data)
         return 0;
-    tree_walker leftWalker(*owner, dataIndex);
-    tree_walker rightWalker(*rhs.owner, rhs.dataIndex);
-    char* leftPiece;
-    char* rightPiece;
+    tree_walker leftWalker(data);
+    tree_walker rightWalker(rhs.data);
+    const char* leftPiece;
+    const char* rightPiece;
     size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
     size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
     size_t leftPieceIndex = 0;
@@ -147,18 +137,15 @@ int string_handle::strcmp(const string_handle& rhs) const {
 }
 
 int string_handle::memcmp(const string_handle& rhs, size_t length) const {
-    auto lock = pool::lock_for_reading(*owner, *rhs.owner);
-    if (owner == rhs.owner && dataIndex == rhs.dataIndex)
+    if (data == rhs.data)
         return 0;
-    auto* leftEntry = owner->data + dataIndex;
-    auto* rightEntry = rhs.owner->data + rhs.dataIndex;
-    tree_walker leftWalker(*owner, dataIndex);
-    tree_walker rightWalker(*rhs.owner, rhs.dataIndex);
-    char* leftPiece;
-    char* rightPiece;
+    tree_walker leftWalker(data);
+    tree_walker rightWalker(rhs.data);
+    const char* leftPiece;
+    const char* rightPiece;
     size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
     size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
-    assert(unpackLength(leftEntry) >= length && unpackLength(rightEntry) >= length);
+    assert(unpackLength(data) >= length && unpackLength(rhs.data) >= length);
     size_t leftPieceIndex = 0;
     size_t rightPieceIndex = 0;
     size_t comparedChars = 0;
@@ -187,9 +174,9 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     return 0;
 }
 
-[[nodiscard]] int string_handle::memcmp_unsafe(const char* rhs, size_t length) const {
-    tree_walker walker(*owner, dataIndex);
-    char* piece;
+[[nodiscard]] int string_handle::memcmp(const char* rhs, size_t length) const {
+    tree_walker walker(data);
+    const char* piece;
     size_t charsCompared = 0;
     size_t pieceLength = walker.get_next_bytes(&piece);
     size_t pieceIndex = 0;
@@ -200,7 +187,7 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
             std::string msg = "Length argument of ";
             msg += std::to_string(length);
             msg += " exceeds this string's length of ";
-            msg += std::to_string(unpackLength(owner->data + dataIndex));
+            msg += std::to_string(unpackLength(data));
             throw std::invalid_argument(msg);
         }
         const auto thisLength = min(pieceLength, length);
@@ -217,20 +204,10 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     return 0;
 }
 
-int string_handle::memcmp(const char* rhs, size_t length) const {
-    auto lock = pool::lock_for_reading(*owner);
-    return memcmp_unsafe(rhs, length);
-}
-
-bool string_handle::equals_unsafe(const char* rhs, size_t length) const {
-    if (unpackLength(owner->data + dataIndex) != length)
-        return false;
-    return 0 == memcmp_unsafe(rhs, length);
-}
-
 bool string_handle::equals(const char* rhs, size_t length) const {
-    auto lock = pool::lock_for_reading(*owner);
-    return equals_unsafe(rhs, length);
+    if (unpackLength(data) != length)
+        return false;
+    return 0 == memcmp(rhs, length);
 }
 
 bool string_handle::equals(std::string_view rhs) const {
@@ -244,11 +221,10 @@ bool string_handle::equals(const char* rhs) const {
 bool string_handle::equals(const string_handle& rhs) const {
     if (this == &rhs)
         return true;
-    auto lock = pool::lock_for_reading(*owner, *rhs.owner);
-    tree_walker leftWalker(*owner, dataIndex);
-    tree_walker rightWalker(*rhs.owner, rhs.dataIndex);
-    char* leftPiece;
-    char* rightPiece;
+    tree_walker leftWalker(data);
+    tree_walker rightWalker(rhs.data);
+    const char* leftPiece;
+    const char* rightPiece;
     size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
     size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
     if (leftPieceLength != rightPieceLength)
@@ -285,20 +261,17 @@ std::string string_handle::to_string() const {
     return ret;
 }
 
-bool string_handle::concat_equals_unsafe(string_handle single, string_handle left, string_handle right) {
-    auto* singleEntry = single.owner->data + single.dataIndex;
-    auto* leftEntry = left.owner->data + left.dataIndex;
-    auto* rightEntry = right.owner->data + right.dataIndex;
-    const auto comparandLength = unpackLength(singleEntry);
-    const auto leftLength = unpackLength(leftEntry);
-    const auto rightLength = unpackLength(rightEntry);
+bool string_handle::concat_equals(string_handle single, string_handle left, string_handle right) {
+    const auto comparandLength = unpackLength(single.data);
+    const auto leftLength = unpackLength(left.data);
+    const auto rightLength = unpackLength(right.data);
     if (comparandLength != leftLength + rightLength)
         return false;
-    tree_walker singleWalker(*single.owner, single.dataIndex);
-    tree_walker comparandWalker(*left.owner, left.dataIndex);
+    tree_walker singleWalker(single.data);
+    tree_walker comparandWalker(left.data);
     bool onLeft = true;
-    char* singlePiece;
-    char* comparandPiece;
+    const char* singlePiece;
+    const char* comparandPiece;
     size_t comparedLength = 0;
     size_t singlePieceLength = singleWalker.get_next_bytes(&singlePiece);
     size_t comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
@@ -325,7 +298,7 @@ bool string_handle::concat_equals_unsafe(string_handle single, string_handle lef
             comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
             if (comparandPieceLength == 0 && onLeft) {
                 onLeft = false;
-                comparandWalker = tree_walker(*right.owner, right.dataIndex);
+                comparandWalker = tree_walker(right.data);
                 comparandPieceLength = comparandWalker.get_next_bytes(&comparandPiece);
             }
             comparandPieceIndex = 0;
@@ -334,8 +307,7 @@ bool string_handle::concat_equals_unsafe(string_handle single, string_handle lef
 }
 
 size_t string_handle::size() const {
-    auto lock = pool::lock_for_reading(*owner);
-    auto ret = unpackLength(owner->data + dataIndex);
+    auto ret = unpackLength(data);
     return ret;
 }
 

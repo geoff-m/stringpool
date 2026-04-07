@@ -3,7 +3,7 @@
 using namespace stringpool;
 
 size_t pool::get_data_size() const {
-    return dataSize;
+    return totalDataSize;
 }
 
 size_t pool::get_total_intern_request_size() const {
