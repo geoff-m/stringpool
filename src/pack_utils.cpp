@@ -5,17 +5,17 @@
 
 using namespace stringpool;
 
-[[nodiscard]] EntryType unpack_node_type(const char* node) {
+[[nodiscard]] EntryType get_node_type(const char* node) {
     return static_cast<EntryType>(node[offsets::ENTRY_TYPE_STRING_LENGTH] & 0b111);
 }
 
-[[nodiscard]] bool isConcat(const char* node) {
-    const auto type = unpack_node_type(node);
+[[nodiscard]] bool is_concat(const char* node) {
+    const auto type = get_node_type(node);
     return type > EntryType::SHORT_CONCAT_CHILD;
 }
 
-[[nodiscard]] size_t unpackLength(const char* node) {
-    const auto nodeType = unpack_node_type(node);
+[[nodiscard]] size_t get_length(const char* node) {
+    const auto nodeType = get_node_type(node);
     switch (nodeType) {
         case EntryType::SHORT_CONCAT_CHILD:
             return node[offsets::ENTRY_TYPE_STRING_LENGTH] >> 4;
@@ -26,8 +26,8 @@ using namespace stringpool;
     }
 }
 
-[[nodiscard]] const char* unpackStringFromLeaf(const char* node) {
-    const auto nodeType = unpack_node_type(node);
+[[nodiscard]] const char* get_string_from_leaf(const char* node) {
+    const auto nodeType = get_node_type(node);
     switch (nodeType) {
         case EntryType::SHORT_CONCAT_CHILD:
             return node + 1;
@@ -40,25 +40,25 @@ using namespace stringpool;
     }
 }
 
-[[nodiscard]] const char* unpackLeftChild(const char* concatNode) {
+[[nodiscard]] const char* get_left_child(const char* concatNode) {
     auto* child = concatNode + offsets::concat::LEFT_PTR;
-    const auto type = unpack_node_type( concatNode);
+    const auto type = get_node_type( concatNode);
     if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_SHORT || type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY) {
         return *reinterpret_cast<const char* const*>(child);
     }
     return concatNode + offsets::concat::LEFT_PTR;
 }
 
-[[nodiscard]] const char* unpackRightChild(const char* concatNode) {
+[[nodiscard]] const char* get_right_child(const char* concatNode) {
     auto* child = concatNode + offsets::concat::RIGHT_PTR;
-    const auto type = unpack_node_type(concatNode);
+    const auto type = get_node_type(concatNode);
     if (type == EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY || type == EntryType::CONCAT_LEFT_SHORT_RIGHT_ENTRY) {
         return *reinterpret_cast<const char* const*>(child);
     }
     return concatNode + offsets::concat::RIGHT_PTR;
 }
 
-[[nodiscard]] EntryType makeConcatType(bool leftIsShort, bool rightIsShort) {
+[[nodiscard]] EntryType make_concat_type(bool leftIsShort, bool rightIsShort) {
     if (!leftIsShort && !rightIsShort)
         return EntryType::CONCAT_LEFT_ENTRY_RIGHT_ENTRY;
     if (leftIsShort && !rightIsShort)

@@ -29,14 +29,14 @@ size_t string_handle::tree_walker::get_next_bytes(const char** bytes) {
         return 0;
     auto* current = toVisit.back();
     toVisit.pop_back();
-    while (isConcat( current)) {
-        const auto rightChild = unpackRightChild(current);
-        const auto leftChild = unpackLeftChild(current);
+    while (is_concat( current)) {
+        const auto rightChild = get_right_child(current);
+        const auto leftChild = get_left_child(current);
         toVisit.emplace_back(rightChild);
         current = leftChild;
     }
-    *bytes = unpackStringFromLeaf(current);
-    return unpackLength( current);
+    *bytes = get_string_from_leaf(current);
+    return get_length( current);
 }
 
 size_t string_handle::copy(char* destination, size_t destination_size) const {
@@ -145,7 +145,7 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
     const char* rightPiece;
     size_t leftPieceLength = leftWalker.get_next_bytes(&leftPiece);
     size_t rightPieceLength = rightWalker.get_next_bytes(&rightPiece);
-    assert(unpackLength(data) >= length && unpackLength(rhs.data) >= length);
+    assert(get_length(data) >= length && get_length(rhs.data) >= length);
     size_t leftPieceIndex = 0;
     size_t rightPieceIndex = 0;
     size_t comparedChars = 0;
@@ -187,7 +187,7 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
             std::string msg = "Length argument of ";
             msg += std::to_string(length);
             msg += " exceeds this string's length of ";
-            msg += std::to_string(unpackLength(data));
+            msg += std::to_string(get_length(data));
             throw std::invalid_argument(msg);
         }
         const auto thisLength = min(pieceLength, length);
@@ -205,7 +205,7 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
 }
 
 bool string_handle::equals(const char* rhs, size_t length) const {
-    if (unpackLength(data) != length)
+    if (get_length(data) != length)
         return false;
     return 0 == memcmp(rhs, length);
 }
@@ -262,9 +262,9 @@ std::string string_handle::to_string() const {
 }
 
 bool string_handle::concat_equals(string_handle single, string_handle left, string_handle right) {
-    const auto comparandLength = unpackLength(single.data);
-    const auto leftLength = unpackLength(left.data);
-    const auto rightLength = unpackLength(right.data);
+    const auto comparandLength = get_length(single.data);
+    const auto leftLength = get_length(left.data);
+    const auto rightLength = get_length(right.data);
     if (comparandLength != leftLength + rightLength)
         return false;
     tree_walker singleWalker(single.data);
@@ -307,7 +307,7 @@ bool string_handle::concat_equals(string_handle single, string_handle left, stri
 }
 
 size_t string_handle::size() const {
-    auto ret = unpackLength(data);
+    auto ret = get_length(data);
     return ret;
 }
 

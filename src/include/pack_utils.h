@@ -45,18 +45,18 @@ namespace offsets {
     return x <= y ? x : y;
 }
 
-[[nodiscard]] EntryType unpack_node_type(const char* node);
+[[nodiscard]] EntryType get_node_type(const char* node);
 
-[[nodiscard]] bool isConcat(const char* node);
+[[nodiscard]] bool is_concat(const char* node);
 
-[[nodiscard]] size_t unpackLength(const char* node);
+[[nodiscard]] size_t get_length(const char* node);
 
-[[nodiscard]] const char* unpackStringFromLeaf(const char* node);
-
-// Returns true iff the child is a leaf.
-[[nodiscard]] const char* unpackLeftChild(const char* concatNode);
+[[nodiscard]] const char* get_string_from_leaf(const char* node);
 
 // Returns true iff the child is a leaf.
-[[nodiscard]] const char* unpackRightChild(const char* concatNode);
+[[nodiscard]] const char* get_left_child(const char* concatNode);
 
-[[nodiscard]] EntryType makeConcatType(bool leftIsShort, bool rightIsShort);
+// Returns true iff the child is a leaf.
+[[nodiscard]] const char* get_right_child(const char* concatNode);
+
+[[nodiscard]] EntryType make_concat_type(bool leftIsShort, bool rightIsShort);

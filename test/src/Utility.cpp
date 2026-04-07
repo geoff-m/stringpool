@@ -26,6 +26,7 @@ void expectSameSign(int x, int y) {
             failSameSign(x, y);
         else return;
     }
+    // x > 0.
     if (y <= 0)
         failSameSign(x, y);
 }

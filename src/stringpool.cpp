@@ -121,10 +121,8 @@ static void addToHash(const char* piece, size_t size, void* pHasher) {
 }
 
 string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_handle right) {
-    const auto* leftEntry = left.data;
-    const auto* rightEntry = right.data;
-    const auto leftLength = unpackLength(leftEntry);
-    const auto rightLength = unpackLength(rightEntry);
+    const auto leftLength = get_length(left.data);
+    const auto rightLength = get_length(right.data);
     const auto totalLength = leftLength + rightLength;
     if (totalLength <= CONCAT_ENTRY_SIZE - ATOM_ENTRY_SIZE) {
         // We will store the concatenation as a single atom node.
@@ -147,30 +145,30 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
         const auto blockSize = CONCAT_ENTRY_SIZE;
-        char* startOfConcat = add_buffer(blockSize);
+        char* concat = add_buffer(blockSize);
         const auto leftIsShort = leftLength <= 7;
         const auto rightIsShort = rightLength <= 7;
-        startOfConcat[0] = static_cast<char>(makeConcatType(leftIsShort, rightIsShort));
-        std::memcpy(startOfConcat + 1, &totalLength, 7);
+        concat[0] = static_cast<char>(make_concat_type(leftIsShort, rightIsShort));
+        std::memcpy(concat + 1, &totalLength, 7);
         if (leftIsShort) {
-            startOfConcat[offsets::concat::LEFT_PTR] = static_cast<char>(
+            concat[offsets::concat::LEFT_PTR] = static_cast<char>(
                 (leftLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
-            left.copy(startOfConcat + offsets::concat::LEFT_PTR + 1, 7);
+            left.copy(concat + offsets::concat::LEFT_PTR + 1, 7);
         } else {
-            std::memcpy(startOfConcat + offsets::concat::LEFT_PTR, &left.data, 8);
+            std::memcpy(concat + offsets::concat::LEFT_PTR, &left.data, 8);
         }
         if (rightIsShort) {
-            startOfConcat[offsets::concat::RIGHT_PTR] = static_cast<char>(
+            concat[offsets::concat::RIGHT_PTR] = static_cast<char>(
                 (rightLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
-            right.copy(startOfConcat + offsets::concat::RIGHT_PTR + 1, 7);
+            right.copy(concat + offsets::concat::RIGHT_PTR + 1, 7);
         } else {
-            std::memcpy(startOfConcat + offsets::concat::RIGHT_PTR, &right.data, 8);
+            std::memcpy(concat + offsets::concat::RIGHT_PTR, &right.data, 8);
         }
         auto r = table.emplace(hash, std::list<string_handle>());
 #ifdef STRINGPOOL_TRACK_OWNERS
-        string_handle ret(startOfConcat, this);
+        string_handle ret(concat, this);
 #else
-        string_handle ret(startOfConcat);
+        string_handle ret(concat);
 #endif
         r.first->second.push_back(ret);
         return ret;
