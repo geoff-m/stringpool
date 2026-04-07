@@ -33,6 +33,16 @@ TEST(CharIterator, One) {
     testCharIterator("a");
 }
 
+TEST(CharIterator, PostfixIncrement) {
+    pool p;
+    auto e = p.intern("ab");
+    auto it = e.begin();
+    EXPECT_EQ('a', *it);
+    EXPECT_EQ('a', *it++);
+    EXPECT_EQ('b', *it++);
+    EXPECT_EQ(e.end(), it);
+}
+
 TEST(CharIterator, LongAtom) {
     std::string s(512, 'a');
     testCharIterator(s.c_str());

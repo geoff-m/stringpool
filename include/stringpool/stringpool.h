@@ -63,12 +63,7 @@ namespace stringpool {
 
             char_iterator& operator++();
 
-            char_iterator operator++(int)
-            {
-                auto tmp = *this;
-                ++*this;
-                return tmp;
-            }
+            char_iterator operator++(int);
 
             [[nodiscard]] bool operator==(const char_iterator& other) const;
             [[nodiscard]] bool operator!=(const char_iterator& other) const;
@@ -76,9 +71,6 @@ namespace stringpool {
         static_assert(std::forward_iterator<char_iterator>);
 
     public:
-        [[nodiscard]] char_iterator begin() const;
-        [[nodiscard]] char_iterator end() const;
-
         /**
          * Gets the length of the string represented by this instance.
          * Same as string_handle::length.
@@ -184,6 +176,16 @@ namespace stringpool {
          * @param state An arbitrary parameter that will be passed to the callback unchanged.
          */
         void visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state) const;
+
+        /**
+         * Gets an iterator pointing to the first character in this string.
+         */
+        [[nodiscard]] char_iterator begin() const;
+
+        /**
+         * Gets an iterator pointing one character past the last character in this string.
+         */
+        [[nodiscard]] char_iterator end() const;
     };
 
     class pool {

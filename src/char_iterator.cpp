@@ -36,6 +36,13 @@ string_handle::char_iterator& string_handle::char_iterator::operator++() {
     return *this;
 }
 
+string_handle::char_iterator string_handle::char_iterator::operator++(int)
+{
+    auto old = *this;
+    ++*this;
+    return old;
+}
+
 bool string_handle::char_iterator::operator==(const char_iterator& other) const {
     if (chunk == nullptr) [[unlikely]]
         return true;
