@@ -16,7 +16,10 @@ add_library(stringpool STATIC
         src/string_handle.cpp
         src/pack_utils.cpp
         src/include/pack_utils.h
-        src/char_iterator.cpp)
+        src/char_iterator.cpp
+        src/reverse_char_iterator.cpp
+        src/tree_walker.cpp
+        src/reverse_tree_walker.cpp)
 
 if (STRINGPOOL_TRACK_OWNERS)
     target_compile_definitions(stringpool PUBLIC STRINGPOOL_TRACK_OWNERS=1)

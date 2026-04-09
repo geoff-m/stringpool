@@ -13,7 +13,8 @@ add_executable(test-stringpool
         src/TestStatistics.cpp
         src/VisitTests.cpp
         src/ToStringTests.cpp
-        src/CharIteratorTests.cpp)
+        src/CharIteratorTests.cpp
+        src/ReverseCharIteratorTests.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 

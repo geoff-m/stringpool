@@ -12,12 +12,14 @@
 
 namespace stringpool {
     class pool;
+
     class string_handle {
         friend class pool;
         const char* data;
 
 #ifdef STRINGPOOL_TRACK_OWNERS
         pool* owner;
+
         string_handle(const char* data, pool* owner);
 #else
         string_handle(const char* data);
@@ -34,6 +36,7 @@ namespace stringpool {
 
         public:
             tree_walker();
+
             tree_walker(const char* root);
 
             [[nodiscard]] size_t get_next_bytes(const char** bytes);
@@ -41,34 +44,83 @@ namespace stringpool {
             [[nodiscard]] bool operator==(const tree_walker&) const = default;
         };
 
+        class reverse_tree_walker {
+            const char* root;
+            std::deque<const char*> toVisit;
+
+        public:
+            reverse_tree_walker();
+
+            reverse_tree_walker(const char* root);
+
+            [[nodiscard]] size_t get_next_bytes(const char** bytes);
+
+            [[nodiscard]] bool operator==(const reverse_tree_walker&) const = default;
+        };
+
         [[nodiscard]] static bool concat_equals(string_handle single, string_handle left, string_handle right);
 
-        class char_iterator
-        {
+        class char_iterator_forward {
             tree_walker walker;
             const char* chunk;
             size_t chunkSize;
             size_t indexInChunk;
+
         public:
             using value_type = char;
             using difference_type = std::ptrdiff_t;
 
-            char_iterator();
-            char_iterator(const string_handle& sh);
-            char_iterator(const char_iterator&) = default;
+            char_iterator_forward();
 
-            char_iterator& operator=(const char_iterator&) = default;
+            explicit char_iterator_forward(const string_handle& sh);
+
+            char_iterator_forward(const char_iterator_forward&) = default;
+
+            char_iterator_forward& operator=(const char_iterator_forward&) = default;
 
             [[nodiscard]] value_type operator*() const;
 
-            char_iterator& operator++();
+            char_iterator_forward& operator++();
 
-            char_iterator operator++(int);
+            char_iterator_forward operator++(int);
 
-            [[nodiscard]] bool operator==(const char_iterator& other) const;
-            [[nodiscard]] bool operator!=(const char_iterator& other) const;
+            [[nodiscard]] bool operator==(const char_iterator_forward& other) const;
+
+            [[nodiscard]] bool operator!=(const char_iterator_forward& other) const;
         };
-        static_assert(std::forward_iterator<char_iterator>);
+
+        static_assert(std::forward_iterator<char_iterator_forward>);
+
+        class char_iterator_backward {
+            reverse_tree_walker walker;
+            const char* chunk;
+            size_t chunkSize;
+            size_t indexInChunk;
+
+        public:
+            using value_type = char;
+            using difference_type = std::ptrdiff_t;
+
+            char_iterator_backward();
+
+            explicit char_iterator_backward(const string_handle& sh);
+
+            char_iterator_backward(const char_iterator_backward&) = default;
+
+            char_iterator_backward& operator=(const char_iterator_backward&) = default;
+
+            [[nodiscard]] value_type operator*() const;
+
+            char_iterator_backward& operator++();
+
+            char_iterator_backward operator++(int);
+
+            [[nodiscard]] bool operator==(const char_iterator_backward& other) const;
+
+            [[nodiscard]] bool operator!=(const char_iterator_backward& other) const;
+        };
+
+        static_assert(std::forward_iterator<char_iterator_backward>);
 
     public:
         /**
@@ -178,14 +230,24 @@ namespace stringpool {
         void visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state) const;
 
         /**
-         * Gets an iterator pointing to the first character in this string.
+         * Gets a forward iterator pointing to the first character in this string.
          */
-        [[nodiscard]] char_iterator begin() const;
+        [[nodiscard]] char_iterator_forward begin() const;
 
         /**
-         * Gets an iterator pointing one character past the last character in this string.
+         * Gets a forward iterator pointing one character past the last character in this string.
          */
-        [[nodiscard]] char_iterator end() const;
+        [[nodiscard]] char_iterator_forward end() const;
+
+        /**
+         * Gets a backward iterator pointing to the last character in this string.
+         */
+        [[nodiscard]] char_iterator_backward rbegin() const;
+
+        /**
+         * Gets a backward iterator pointing one character before the first character in this string.
+         */
+        [[nodiscard]] char_iterator_backward rend() const;
     };
 
     class pool {
@@ -193,6 +255,7 @@ namespace stringpool {
         size_t totalDataSize = 0;
 
         [[nodiscard]] char* add_buffer(size_t size);
+
         friend class string_handle;
 
         // Prevents concurrent changes to table contents.

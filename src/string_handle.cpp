@@ -16,32 +16,7 @@ string_handle::string_handle(const char* data, pool* owner)
 string_handle::string_handle(const char* data)
     : data(data) {
 }
-
 #endif
-
-string_handle::tree_walker::tree_walker()
-    : root(nullptr) {
-}
-
-string_handle::tree_walker::tree_walker(const char* root)
-    : root(root) {
-    toVisit.emplace_back(root);
-}
-
-size_t string_handle::tree_walker::get_next_bytes(const char** bytes) {
-    if (toVisit.empty())
-        return 0;
-    auto* current = toVisit.back();
-    toVisit.pop_back();
-    while (is_concat(current)) {
-        const auto rightChild = get_right_child(current);
-        const auto leftChild = get_left_child(current);
-        toVisit.emplace_back(rightChild);
-        current = leftChild;
-    }
-    *bytes = get_string_from_leaf(current);
-    return get_length(current);
-}
 
 size_t string_handle::copy(char* destination, size_t destination_size) const {
     if (destination_size == 0)
@@ -310,11 +285,19 @@ bool string_handle::concat_equals(string_handle single, string_handle left, stri
     }
 }
 
-string_handle::char_iterator string_handle::begin() const {
-    return {*this};
+string_handle::char_iterator_forward string_handle::begin() const {
+    return char_iterator_forward(*this);
 }
 
-string_handle::char_iterator string_handle::end() const {
+string_handle::char_iterator_forward string_handle::end() const {
+    return {};
+}
+
+string_handle::char_iterator_backward string_handle::rbegin() const {
+    return char_iterator_backward(*this);
+}
+
+string_handle::char_iterator_backward string_handle::rend() const {
     return {};
 }
 
