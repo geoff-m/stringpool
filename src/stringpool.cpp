@@ -124,12 +124,12 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
     const auto leftLength = get_length(left.data);
     const auto rightLength = get_length(right.data);
     const auto totalLength = leftLength + rightLength;
-    if (totalLength <= CONCAT_ENTRY_SIZE - ATOM_ENTRY_SIZE) {
+    if (totalLength <= sizes::CONCAT - sizes::ATOM) {
         // We will store the concatenation as a single atom node.
-        const auto blockSize = ATOM_ENTRY_SIZE + totalLength;
+        const auto blockSize = sizes::ATOM + totalLength;
         char* startOfAtom = add_buffer(blockSize);
         startOfAtom[0] = static_cast<char>(EntryType::ATOM);
-        std::memcpy(startOfAtom + 1, &totalLength, 7);
+        std::memcpy(startOfAtom + offsets::atom::STRING_LENGTH, &totalLength, 7);
         left.copy(startOfAtom + offsets::atom::STRING_VALUE, leftLength);
         right.copy(startOfAtom + offsets::atom::STRING_VALUE + leftLength, rightLength);
         auto r = table.emplace(hash, std::list<string_handle>());
@@ -144,12 +144,12 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
         // We will store the concatenation as a concat node.
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
-        const auto blockSize = CONCAT_ENTRY_SIZE;
+        const auto blockSize = sizes::CONCAT;
         char* concat = add_buffer(blockSize);
         const auto leftIsShort = leftLength <= 7;
         const auto rightIsShort = rightLength <= 7;
         concat[0] = static_cast<char>(make_concat_type(leftIsShort, rightIsShort));
-        std::memcpy(concat + 1, &totalLength, 7);
+        std::memcpy(concat + offsets::concat::STRING_LENGTH, &totalLength, 7);
         if (leftIsShort) {
             concat[offsets::concat::LEFT_PTR] = static_cast<char>(
                 (leftLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));

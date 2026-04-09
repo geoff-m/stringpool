@@ -15,31 +15,56 @@ enum class EntryType : uint8_t {
 constexpr uint64_t UPPER_7_MASK = 0xffffffffffffff00;
 constexpr uint64_t UPPER_1_MASK = 0xff00000000000000;
 
-// Minimum size of an atom entry.
-constexpr uint64_t ATOM_ENTRY_SIZE = 8;
-
-// Size of a concat entry.
-constexpr uint64_t CONCAT_ENTRY_SIZE = 8 * 3;
-
 namespace offsets {
-    constexpr int ENTRY_TYPE_STRING_LENGTH = 0;
+    constexpr int ENTRY_TYPE = 0;
 
     namespace atom {
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+        constexpr int REFCOUNT = 1;
+        constexpr int STRING_LENGTH = 9;
+        constexpr int STRING_VALUE = 16;
+#else
         constexpr int STRING_LENGTH = 1;
         constexpr int STRING_VALUE = 8;
+#endif
     }
 
     namespace short_atom {
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+        constexpr int REFCOUNT = 1;
+        constexpr int STRING_LENGTH = 9;
+        constexpr int STRING_VALUE = 10;
+#else
         constexpr int STRING_LENGTH = 1;
         constexpr int STRING_VALUE = 2;
+#endif
     }
 
     namespace concat {
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+        constexpr int REFCOUNT = 1;
+        constexpr int STRING_LENGTH = 9;
+        constexpr int LEFT_PTR = 16;
+        constexpr int RIGHT_PTR = 24;
+#else
+        constexpr int STRING_LENGTH = 1;
         constexpr int LEFT_PTR = 8;
         constexpr int RIGHT_PTR = 16;
+#endif
     }
 }
 
+namespace sizes {
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+    constexpr int ATOM = 24;
+    constexpr int SHORT_ATOM = 10;
+    constexpr int CONCAT = 32;
+#else
+    constexpr int ATOM = 8;
+    constexpr int SHORT_ATOM = 2;
+    constexpr int CONCAT = 24;
+#endif
+}
 
 [[nodiscard]] inline size_t min(const size_t x, const size_t y) {
     return x <= y ? x : y;

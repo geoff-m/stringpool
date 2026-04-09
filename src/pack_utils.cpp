@@ -6,7 +6,7 @@
 using namespace stringpool;
 
 [[nodiscard]] EntryType get_node_type(const char* node) {
-    return static_cast<EntryType>(node[offsets::ENTRY_TYPE_STRING_LENGTH] & 0b111);
+    return static_cast<EntryType>(node[offsets::ENTRY_TYPE] & 0b111);
 }
 
 [[nodiscard]] bool is_concat(const char* node) {
@@ -18,11 +18,11 @@ using namespace stringpool;
     const auto nodeType = get_node_type(node);
     switch (nodeType) {
         case EntryType::SHORT_CONCAT_CHILD:
-            return node[offsets::ENTRY_TYPE_STRING_LENGTH] >> 4;
+            return node[offsets::ENTRY_TYPE] >> 4;
         case EntryType::SHORT_ATOM:
             return static_cast<unsigned char>(node[offsets::short_atom::STRING_LENGTH]);
         default:
-            return reinterpret_cast<const uint64_t*>(node)[offsets::ENTRY_TYPE_STRING_LENGTH] >> 8;
+            return reinterpret_cast<const uint64_t*>(node)[offsets::ENTRY_TYPE] >> 8;
     }
 }
 
