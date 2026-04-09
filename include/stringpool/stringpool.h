@@ -9,7 +9,6 @@
 #include <vector>
 #include <iterator>
 
-
 namespace stringpool {
     class pool;
 
@@ -356,7 +355,6 @@ namespace stringpool {
                 std::shared_lock(p1.tableRwMutex, std::defer_lock),
                 std::shared_lock(p2.tableRwMutex, std::defer_lock));
         }
-
 
         [[nodiscard]] static writer_lock lock_for_writing(pool& p1) {
             return writer_lock(std::unique_lock(p1.tableRwMutex));

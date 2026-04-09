@@ -4,19 +4,17 @@ A string interning library with concatenation.
 ## Usage
 The string pool offers just one main function, `intern`,
 whose usage is simple.
-`intern` performs the following:
-1. Checks whether your string is already stored in the pool.
-If it is, `intern` returns you a handle to that string. 
-3. Otherwise, `intern` copies your string into the pool,
-and then returns you a handle to it.
+`intern` takes a string argument and returns a `string_handle`
+representing a cached version of the data in the given string,
+inserting it into the pool's cache if not already present.
+Once added to the pool, strings live there until the pool is destroyed.
 
-You can then store these handles, of type `string_handle`,
-in place of your normal string types.
+You can then store these handles in place of your normal strings.
 In this way, you can achieve deduplication by sacrificing a bit of convenience.
 
 ### string_handle
 A `string_handle` is a pointer-sized object that refers to a
-string that lives in a `stringpool`.
+string that lives in a `pool`.
 It is like a `const std::string` or `const char*` for most intents and purposes,
 with the caveat that there is no API for viewing it as a single contiguous buffer.
 Nevertheless, it has a rich set of accessors:
