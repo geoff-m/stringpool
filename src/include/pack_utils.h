@@ -12,7 +12,11 @@ constexpr uint64_t UPPER_7_MASK = 0xffffffffffffff00;
 constexpr uint64_t UPPER_1_MASK = 0xff00000000000000;
 
 namespace offsets {
-    constexpr int NODE_TYPE = 8;
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+    constexpr int NODE_TYPE = 8; // Must be the same for all node types.
+#else
+    constexpr int NODE_TYPE = 0; // Must be the same for all node types.
+#endif
 
     namespace atom {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
@@ -21,6 +25,7 @@ namespace offsets {
         constexpr int STRING_LENGTH = 9;
         constexpr int STRING_VALUE = 16;
 #else
+        constexpr int NODE_TYPE = 0;
         constexpr int STRING_LENGTH = 1;
         constexpr int STRING_VALUE = 8;
 #endif
@@ -33,6 +38,7 @@ namespace offsets {
         constexpr int STRING_LENGTH = 9;
         constexpr int STRING_VALUE = 10;
 #else
+        constexpr int NODE_TYPE = 0;
         constexpr int STRING_LENGTH = 1;
         constexpr int STRING_VALUE = 2;
 #endif
@@ -46,6 +52,7 @@ namespace offsets {
         constexpr int LEFT_PTR = 16;
         constexpr int RIGHT_PTR = 24;
 #else
+        constexpr int NODE_TYPE = 0;
         constexpr int STRING_LENGTH = 1;
         constexpr int LEFT_PTR = 8;
         constexpr int RIGHT_PTR = 16;

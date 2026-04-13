@@ -133,17 +133,17 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
     const auto leftLength = get_length(left.data);
     const auto rightLength = get_length(right.data);
     const auto totalLength = leftLength + rightLength;
-
     if (totalLength <= MAX_SHORT_ATOM_STRING_LENGTH) {
         // We will store the concatenation as a single atom node.
-
         EntryType type;
         const auto atomSize = compute_atom_size(totalLength, &type);
         assert(type == EntryType::SHORT_ATOM);
         char* startOfAtom = add_buffer(atomSize);
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
         *reinterpret_cast<size_t*>(startOfAtom + offsets::short_atom::REFCOUNT) = 0x1badf00d;
+#endif
         startOfAtom[offsets::short_atom::NODE_TYPE] = static_cast<char>(EntryType::SHORT_ATOM);
-        std::memcpy(startOfAtom + offsets::short_atom::STRING_LENGTH, &totalLength, 7);
+        startOfAtom[offsets::short_atom::STRING_LENGTH] = static_cast<char>(totalLength);
         left.copy(startOfAtom + offsets::short_atom::STRING_VALUE, leftLength);
         right.copy(startOfAtom + offsets::short_atom::STRING_VALUE + leftLength, rightLength);
         assert(get_length(startOfAtom) == totalLength);
@@ -161,7 +161,9 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
         // since if we could, we'd just make it an atom instead of a concat.
         const auto blockSize = sizes::CONCAT;
         char* concat = add_buffer(blockSize);
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
         *reinterpret_cast<size_t*>(concat + offsets::concat::REFCOUNT) = 0x2badf00d;
+#endif
         concat[offsets::concat::NODE_TYPE] = static_cast<char>(EntryType::CONCAT);
         std::memcpy(concat + offsets::concat::STRING_LENGTH, &totalLength, 7);
         std::memcpy(concat + offsets::concat::LEFT_PTR, &left.data, 8);
