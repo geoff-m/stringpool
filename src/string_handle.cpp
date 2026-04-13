@@ -184,7 +184,8 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const {
 }
 
 bool string_handle::equals(const char* rhs, size_t length) const {
-    if (get_length(data) != length)
+    const auto thisLength = get_length(data);
+    if (thisLength != length)
         return false;
     return 0 == memcmp(rhs, length);
 }

@@ -90,28 +90,37 @@ string_handle pool::intern(std::string_view string) {
 }
 
 char* pool::add_buffer(size_t size) {
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+    // Ensure size_t alignment so that ref count is aligned.
+    auto qWords = size / sizeof(size_t);
+    if (qWords * sizeof(size_t) != size)
+        ++qWords;
+    auto* ret = reinterpret_cast<char*>(new size_t[qWords]);
+#else
     auto* ret = new char[size];
+#endif
     data.emplace_back(ret);
     totalDataSize += size;
     return ret;
 }
 
 char* pool::add_atom_unsafe(const char* string, size_t stringSize) {
-    if (stringSize < 256) {
-        const auto blockSize = 2 + stringSize;
-        char* startOfAtom = add_buffer(blockSize);
-        startOfAtom[0] = static_cast<char>(EntryType::SHORT_ATOM);
+    EntryType type;
+    const auto blockSize = compute_atom_size(stringSize, &type);
+    char* startOfAtom = add_buffer(blockSize);
+    if (type == EntryType::SHORT_ATOM) {
+        startOfAtom[offsets::short_atom::NODE_TYPE] = static_cast<char>(EntryType::SHORT_ATOM);
         startOfAtom[offsets::short_atom::STRING_LENGTH] = static_cast<char>(stringSize);
         std::memcpy(startOfAtom + offsets::short_atom::STRING_VALUE, string, stringSize);
+        assert(get_length(startOfAtom) == stringSize);
         return startOfAtom;
     } else {
-        const auto blockSize = 16 + stringSize;
-        char* startOfAtom = add_buffer(blockSize);
-        if (stringSize != (stringSize & ~UPPER_1_MASK))
-            std::abort(); // string is too large.
-        startOfAtom[0] = static_cast<char>(EntryType::ATOM);
+        if (stringSize != (stringSize & ~UPPER_1_MASK)) [[unlikely]]
+                std::abort(); // string is too large.
+        startOfAtom[offsets::atom::NODE_TYPE] = static_cast<char>(EntryType::ATOM);
         std::memcpy(startOfAtom + offsets::atom::STRING_LENGTH, &stringSize, 7);
         std::memcpy(startOfAtom + offsets::atom::STRING_VALUE, string, stringSize);
+        assert(get_length(startOfAtom) == stringSize);
         return startOfAtom;
     }
 }
@@ -124,14 +133,20 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
     const auto leftLength = get_length(left.data);
     const auto rightLength = get_length(right.data);
     const auto totalLength = leftLength + rightLength;
-    if (totalLength <= sizes::CONCAT - sizes::ATOM) {
+
+    if (totalLength <= MAX_SHORT_ATOM_STRING_LENGTH) {
         // We will store the concatenation as a single atom node.
-        const auto blockSize = sizes::ATOM + totalLength;
-        char* startOfAtom = add_buffer(blockSize);
-        startOfAtom[0] = static_cast<char>(EntryType::ATOM);
-        std::memcpy(startOfAtom + offsets::atom::STRING_LENGTH, &totalLength, 7);
-        left.copy(startOfAtom + offsets::atom::STRING_VALUE, leftLength);
-        right.copy(startOfAtom + offsets::atom::STRING_VALUE + leftLength, rightLength);
+
+        EntryType type;
+        const auto atomSize = compute_atom_size(totalLength, &type);
+        assert(type == EntryType::SHORT_ATOM);
+        char* startOfAtom = add_buffer(atomSize);
+        *reinterpret_cast<size_t*>(startOfAtom + offsets::short_atom::REFCOUNT) = 0x1badf00d;
+        startOfAtom[offsets::short_atom::NODE_TYPE] = static_cast<char>(EntryType::SHORT_ATOM);
+        std::memcpy(startOfAtom + offsets::short_atom::STRING_LENGTH, &totalLength, 7);
+        left.copy(startOfAtom + offsets::short_atom::STRING_VALUE, leftLength);
+        right.copy(startOfAtom + offsets::short_atom::STRING_VALUE + leftLength, rightLength);
+        assert(get_length(startOfAtom) == totalLength);
         auto r = table.emplace(hash, std::list<string_handle>());
 #ifdef STRINGPOOL_TRACK_OWNERS
         string_handle ret(startOfAtom, this);
@@ -146,24 +161,11 @@ string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_ha
         // since if we could, we'd just make it an atom instead of a concat.
         const auto blockSize = sizes::CONCAT;
         char* concat = add_buffer(blockSize);
-        const auto leftIsShort = leftLength <= 7;
-        const auto rightIsShort = rightLength <= 7;
-        concat[0] = static_cast<char>(make_concat_type(leftIsShort, rightIsShort));
+        *reinterpret_cast<size_t*>(concat + offsets::concat::REFCOUNT) = 0x2badf00d;
+        concat[offsets::concat::NODE_TYPE] = static_cast<char>(EntryType::CONCAT);
         std::memcpy(concat + offsets::concat::STRING_LENGTH, &totalLength, 7);
-        if (leftIsShort) {
-            concat[offsets::concat::LEFT_PTR] = static_cast<char>(
-                (leftLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
-            left.copy(concat + offsets::concat::LEFT_PTR + 1, 7);
-        } else {
-            std::memcpy(concat + offsets::concat::LEFT_PTR, &left.data, 8);
-        }
-        if (rightIsShort) {
-            concat[offsets::concat::RIGHT_PTR] = static_cast<char>(
-                (rightLength << 4) | static_cast<char>(EntryType::SHORT_CONCAT_CHILD));
-            right.copy(concat + offsets::concat::RIGHT_PTR + 1, 7);
-        } else {
-            std::memcpy(concat + offsets::concat::RIGHT_PTR, &right.data, 8);
-        }
+        std::memcpy(concat + offsets::concat::LEFT_PTR, &left.data, 8);
+        std::memcpy(concat + offsets::concat::RIGHT_PTR, &right.data, 8);
         auto r = table.emplace(hash, std::list<string_handle>());
 #ifdef STRINGPOOL_TRACK_OWNERS
         string_handle ret(concat, this);

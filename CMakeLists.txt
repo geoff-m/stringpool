@@ -9,7 +9,7 @@ option(STRINGPOOL_TRACK_OWNERS
 
 option(STRINGPOOL_REFCOUNT_ENABLE
         "Whether stringpool should reference-count its contents. Disabling will make the cache grow-only and will boost performance."
-        OFF)
+        ON)
 
 add_library(stringpool STATIC
         src/stringpool.cpp

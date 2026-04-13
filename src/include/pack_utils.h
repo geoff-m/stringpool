@@ -5,22 +5,19 @@
 enum class EntryType : uint8_t {
     ATOM = 0,
     SHORT_ATOM = 1,
-    SHORT_CONCAT_CHILD = 2,
-    CONCAT_LEFT_ENTRY_RIGHT_ENTRY = 3,
-    CONCAT_LEFT_ENTRY_RIGHT_SHORT = 4,
-    CONCAT_LEFT_SHORT_RIGHT_ENTRY = 5,
-    CONCAT_LEFT_SHORT_RIGHT_SHORT = 6,
+    CONCAT = 2
 };
 
 constexpr uint64_t UPPER_7_MASK = 0xffffffffffffff00;
 constexpr uint64_t UPPER_1_MASK = 0xff00000000000000;
 
 namespace offsets {
-    constexpr int ENTRY_TYPE = 0;
+    constexpr int NODE_TYPE = 8;
 
     namespace atom {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        constexpr int REFCOUNT = 1;
+        constexpr int REFCOUNT = 0;
+        constexpr int NODE_TYPE = 8;
         constexpr int STRING_LENGTH = 9;
         constexpr int STRING_VALUE = 16;
 #else
@@ -31,7 +28,8 @@ namespace offsets {
 
     namespace short_atom {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        constexpr int REFCOUNT = 1;
+        constexpr int REFCOUNT = 0;
+        constexpr int NODE_TYPE = 8;
         constexpr int STRING_LENGTH = 9;
         constexpr int STRING_VALUE = 10;
 #else
@@ -42,7 +40,8 @@ namespace offsets {
 
     namespace concat {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        constexpr int REFCOUNT = 1;
+        constexpr int REFCOUNT = 0;
+        constexpr int NODE_TYPE = 8;
         constexpr int STRING_LENGTH = 9;
         constexpr int LEFT_PTR = 16;
         constexpr int RIGHT_PTR = 24;
@@ -60,15 +59,20 @@ namespace sizes {
     constexpr int SHORT_ATOM = 10;
     constexpr int CONCAT = 32;
 #else
-    constexpr int ATOM = 8;
+    constexpr int ATOM = 16;
     constexpr int SHORT_ATOM = 2;
     constexpr int CONCAT = 24;
 #endif
 }
 
+constexpr int MAX_SHORT_ATOM_STRING_LENGTH = 255;
+
 [[nodiscard]] inline size_t min(const size_t x, const size_t y) {
     return x <= y ? x : y;
 }
+
+// Gets the total size the atom would have that contained a string of the given length.
+[[nodiscard]] size_t compute_atom_size(size_t stringLength, EntryType* outputType);
 
 [[nodiscard]] EntryType get_node_type(const char* node);
 
@@ -83,5 +87,3 @@ namespace sizes {
 
 // Returns true iff the child is a leaf.
 [[nodiscard]] const char* get_right_child(const char* concatNode);
-
-[[nodiscard]] EntryType make_concat_type(bool leftIsShort, bool rightIsShort);
