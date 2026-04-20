@@ -1,7 +1,6 @@
 #include "stringpool/stringpool.h"
 #include "include/hash.h"
 #include "include/pack_utils.h"
-#include <algorithm>
 #include <atomic>
 #include <cassert>
 #include <cstring>
@@ -132,7 +131,7 @@ void string_handle::actually_delete_unsafe(char* data, pool& owner, size_t hash)
             if (get_refcount(data) != 0)
             {
                 // lost race; some other thread incremented it
-                //maybe_decrement_children_refcounts(data, owner); // todo: need this?
+                maybe_decrement_children_refcounts(data, owner); // todo: need this?
                 return;
             }
             list.erase(listIt);

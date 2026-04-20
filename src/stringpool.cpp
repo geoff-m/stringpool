@@ -69,7 +69,7 @@ string_handle pool::intern(const char* string) {
 
 // Attempts to intern the given string, or else return its handle if it already exists in the cache.
 pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_t size, bool haveWriterLock,
-                                          weak_string_handle& result) {
+                                          internal::weak_string_handle& result) {
     auto it = table.find(hash);
     if (it != table.end()) {
         auto existingEntries = it->second;
@@ -84,7 +84,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
             return InternResult::NeedWriterLock;
         char* atom = add_atom_unsafe(string, size, hash);
 #ifdef STRINGPOOL_TRACK_OWNERS
-        weak_string_handle ret(atom, this);
+        internal::weak_string_handle ret(atom, this);
 #else
         weak_string_handle ret(atom);
 #endif
@@ -97,9 +97,9 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     if (!haveWriterLock)
         return InternResult::NeedWriterLock;
     char* atom = add_atom_unsafe(string, size, hash);
-    auto r = table.emplace(hash, std::list<weak_string_handle>());
+    auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
 #ifdef STRINGPOOL_TRACK_OWNERS
-    weak_string_handle ret(atom, this);
+    internal::weak_string_handle ret(atom, this);
 #else
     weak_string_handle ret(atom);
 #endif
@@ -114,7 +114,7 @@ string_handle pool::intern(const char* string, size_t size) {
     std::shared_lock readLock(tableRwMutex);
     ++totalInternRequestCount;
     totalInternRequestSize += size;
-    weak_string_handle result{};
+    internal::weak_string_handle result{};
     auto resultWithRead = do_intern_unsafe(hash, string, size, false, result);
     if (resultWithRead == InternResult::NeedWriterLock) {
         readLock.unlock();
@@ -132,7 +132,7 @@ string_handle pool::intern(std::string_view string) {
     return intern(string.data(), string.size());
 }
 
-weak_string_handle::weak_string_handle(const char* data, pool* owner)
+internal::weak_string_handle::weak_string_handle(const char* data, pool* owner)
     : data(data)
 #ifdef STRINGPOOL_TRACK_OWNERS
       , owner(owner)
@@ -140,8 +140,8 @@ weak_string_handle::weak_string_handle(const char* data, pool* owner)
 {
 }
 
-string_handle weak_string_handle::make_strong() const {
-    return string_handle(data, owner);
+string_handle internal::weak_string_handle::make_strong() const {
+    return stringpool::string_handle(data, owner);
 }
 
 char* pool::add_buffer(size_t size) {
@@ -201,7 +201,7 @@ static void addToHash(const char* piece, size_t size, void* pHasher) {
     static_cast<hasher*>(pHasher)->add(piece, size);
 }
 
-weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_handle right) {
+internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_handle right) {
     const auto leftLength = get_length(left.data);
     const auto rightLength = get_length(right.data);
     const auto totalLength = leftLength + rightLength;
@@ -220,9 +220,9 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
         left.copy(startOfAtom + offsets::short_atom::STRING_VALUE, leftLength);
         right.copy(startOfAtom + offsets::short_atom::STRING_VALUE + leftLength, rightLength);
         assert(get_length(startOfAtom) == totalLength);
-        auto r = table.emplace(hash, std::list<weak_string_handle>());
+        auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
 #ifdef STRINGPOOL_TRACK_OWNERS
-        weak_string_handle ret(startOfAtom, this);
+        internal::weak_string_handle ret(startOfAtom, this);
 #else
         weak_string_handle ret(startOfAtom);
 #endif
@@ -242,13 +242,13 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
         std::memcpy(concat + offsets::concat::STRING_LENGTH, &totalLength, 7);
         std::memcpy(concat + offsets::concat::LEFT_PTR, &left.data, 8);
         std::memcpy(concat + offsets::concat::RIGHT_PTR, &right.data, 8);
-        auto r = table.emplace(hash, std::list<weak_string_handle>());
+        auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
         left.refcount_increment();
         right.refcount_increment();
 #endif
 #ifdef STRINGPOOL_TRACK_OWNERS
-        weak_string_handle ret(concat, this);
+        internal::weak_string_handle ret(concat, this);
 #else
         weak_string_handle ret(concat);
 #endif
@@ -259,7 +259,7 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
 
 // Attempts to intern the concatenation of the given string handles, or else return its handle if it already exists in the cache.
 pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, string_handle right, bool haveWriterLock,
-                                          weak_string_handle& result) {
+                                          internal::weak_string_handle& result) {
     auto it = table.find(hash);
     if (it == table.end()) {
         // Nothing in table has this hash.
@@ -291,7 +291,7 @@ string_handle pool::concat(string_handle left, string_handle right) {
     left.visit_chunks(addToHash, &h);
     right.visit_chunks(addToHash, &h);
     const auto hash = h.finish();
-    weak_string_handle result{};
+    internal::weak_string_handle result{};
     auto readResult = do_concat_unsafe(hash, left, right, false, result);
     if (readResult == InternResult::NeedWriterLock) {
         readLock.unlock();

@@ -10,8 +10,15 @@
 #include <vector>
 #include <iterator>
 
-namespace stringpool {
-    struct allocator {
+namespace stringpool
+{
+    namespace internal
+    {
+        class weak_string_handle;
+    }
+
+    struct allocator
+    {
         virtual ~allocator() = default;
 
         virtual char* allocate(size_t size) = 0;
@@ -21,9 +28,10 @@ namespace stringpool {
 
     class pool;
 
-    class string_handle {
+    class string_handle
+    {
         friend class pool;
-        friend struct weak_string_handle;
+        friend class internal::weak_string_handle;
         const char* data;
 
 #ifdef STRINGPOOL_TRACK_OWNERS
@@ -36,7 +44,8 @@ namespace stringpool {
 
         string_handle() = default;
 
-        class tree_walker {
+        class tree_walker
+        {
             // We assume this won't change during the lifetime of this object.
             // This is currently upheld by users of this class.
             const char* root;
@@ -53,7 +62,8 @@ namespace stringpool {
             [[nodiscard]] bool operator==(const tree_walker&) const = default;
         };
 
-        class reverse_tree_walker {
+        class reverse_tree_walker
+        {
             const char* root;
             std::deque<const char*> toVisit;
 
@@ -73,7 +83,8 @@ namespace stringpool {
 
         [[nodiscard]] static int memcmp(const char* leftNode, const char* rhs, size_t length);
 
-        class char_iterator_forward {
+        class char_iterator_forward
+        {
             tree_walker walker;
             const char* chunk;
             size_t chunkSize;
@@ -104,7 +115,8 @@ namespace stringpool {
 
         static_assert(std::forward_iterator<char_iterator_forward>);
 
-        class char_iterator_backward {
+        class char_iterator_backward
+        {
             reverse_tree_walker walker;
             const char* chunk;
             size_t chunkSize;
@@ -296,24 +308,30 @@ namespace stringpool {
         [[nodiscard]] char_iterator_backward rend() const;
     };
 
-    struct weak_string_handle {
-        friend class pool;
-        const char* data;
+    namespace internal
+    {
+        class weak_string_handle
+        {
+            friend class stringpool::pool;
+            friend class stringpool::string_handle;
+            const char* data;
 
 #ifdef STRINGPOOL_TRACK_OWNERS
-        pool* owner;
+            stringpool::pool* owner;
 
-        weak_string_handle(const char* data, pool* owner);
+            weak_string_handle(const char* data, pool* owner);
 #else
-        weak_string_handle(const char* data);
+            weak_string_handle(const char* data);
 #endif
 
-        [[nodiscard]] string_handle make_strong() const;
+            [[nodiscard]] stringpool::string_handle make_strong() const;
 
-        weak_string_handle() = default;
-    };
+            weak_string_handle() = default;
+        };
+    }
 
-    class pool {
+    class pool
+    {
         std::vector<char*> data;
         size_t totalDataSize = 0;
 
@@ -328,14 +346,15 @@ namespace stringpool {
 
         // key: hash
         // value: list of strings having that hash
-        std::unordered_map<size_t, std::list<weak_string_handle>> table;
+        std::unordered_map<size_t, std::list<internal::weak_string_handle>> table;
 
         // These functions are not thread-safe.
         char* add_atom_unsafe(const char* string, size_t stringSize, size_t hash);
 
-        weak_string_handle add_concat_unsafe(size_t hash, string_handle left, string_handle right);
+        internal::weak_string_handle add_concat_unsafe(size_t hash, string_handle left, string_handle right);
 
-        enum class InternResult {
+        enum class InternResult
+        {
             Success = 0,
             NeedWriterLock = 1
         };
@@ -345,7 +364,7 @@ namespace stringpool {
                                       const char* string,
                                       size_t size,
                                       bool haveWriterLock,
-                                      weak_string_handle& result);
+                                      internal::weak_string_handle& result);
 
         // Caller must hold reader (or writer) lock on this and left and right owners.
         InternResult do_concat_unsafe(
@@ -353,7 +372,7 @@ namespace stringpool {
             string_handle left,
             string_handle right,
             bool haveWriterLock,
-            weak_string_handle& result);
+            internal::weak_string_handle& result);
 
         // Statistics.
         size_t totalInternRequestSize = 0;
@@ -454,9 +473,11 @@ bool operator==(const stringpool::string_handle& lhs, const stringpool::string_h
 
 bool operator!=(const stringpool::string_handle& lhs, const stringpool::string_handle& rhs);
 
-template<>
-struct std::hash<stringpool::string_handle> {
-    std::size_t operator()(stringpool::string_handle const& s) const noexcept {
+template <>
+struct std::hash<stringpool::string_handle>
+{
+    std::size_t operator()(stringpool::string_handle const& s) const noexcept
+    {
         return s.hash();
     }
 };
