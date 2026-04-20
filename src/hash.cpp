@@ -1,12 +1,10 @@
 #include "include/hash.h"
-
 #include <cstdlib>
-#include <cstring>
 
 using namespace stringpool;
-
+constexpr auto SEED = 0x7448652047614D65;
 size_t hasher::hash(const char* string, size_t length) {
-    return XXH64(string, length, 0x7448652047614D65);
+    return XXH3_64bits_withSeed(string, length, SEED);
 }
 
 void abortOnError(XXH_errorcode ec) {
@@ -27,5 +25,5 @@ size_t hasher::finish() {
 }
 
 void hasher::reset() {
-    abortOnError(XXH3_64bits_reset(&state));
+    abortOnError(XXH3_64bits_reset_withSeed(&state, SEED));
 }
