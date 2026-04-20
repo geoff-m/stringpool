@@ -33,14 +33,10 @@ namespace stringpool
         friend class pool;
         friend class internal::weak_string_handle;
         const char* data;
-
-#ifdef STRINGPOOL_TRACK_OWNERS
         pool* owner;
 
         string_handle(const char* data, pool* owner);
-#else
-        string_handle(const char* data);
-#endif
+
 
         string_handle() = default;
 
@@ -315,14 +311,9 @@ namespace stringpool
             friend class stringpool::pool;
             friend class stringpool::string_handle;
             const char* data;
-
-#ifdef STRINGPOOL_TRACK_OWNERS
             stringpool::pool* owner;
 
             weak_string_handle(const char* data, pool* owner);
-#else
-            weak_string_handle(const char* data);
-#endif
 
             [[nodiscard]] stringpool::string_handle make_strong() const;
 
