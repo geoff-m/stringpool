@@ -61,6 +61,30 @@ which makes `visit_chunks` no better than the char iterator approach.
 But the opposite is more likely, i.e. that you will get a small number of chunks,
 including the ideal case of just a single chunk containing the entire string.
 
+#### Example using `write`
+Consider the following example, in which we want to write an interned string to a file using POSIX `write`.
+A function like the following will work but be inefficient, as it will always call `write`
+once for each character.
+```c++
+void inefficient_write(int file, const string_handle& sh) {
+    for (auto c : sh) {
+        write(file, &c, 1);
+    }
+}
+```
+The implementation below is likely to be much more efficient by minimizing the number of `write` calls.
+```c++
+void write_chunk(const char* chunk, size_t chunk_size, void* file) {
+    write(*static_cast<int*>(file), chunk, chunk_size);
+}
+
+void efficient_write(int file, const string_handle& sh) {
+    sh.visit_chunks(write_chunk, &file);
+}
+```
+`write(file, sh.to_string().c_str(), sh.size())` would also work
+but would make a copy of the string, thereby defeating the purpose of interning.
+
 ### Concatenation
 In addition to `intern`, there is also `concat`,
 a function which takes two `string_handle` arguments
