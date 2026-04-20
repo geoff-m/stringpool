@@ -5,21 +5,24 @@
 
 using namespace stringpool;
 
-void expectMemcmp(int expectation, string_handle left, string_handle right, size_t length) {
-
+void expectMemcmp(int expectation, string_handle left, string_handle right, size_t length)
+{
     expectSameSign(expectation, left.memcmp(right, length));
     expectSameSign(-expectation, right.memcmp(left, length));
 }
 
-void expectMemcmp(int expectation, string_handle left, const char* right, size_t length) {
+void expectMemcmp(int expectation, string_handle left, const char* right, size_t length)
+{
     expectSameSign(expectation, left.memcmp(right, length));
 }
 
-void expectMemcmp(int expectation, const char* left, string_handle right, size_t length) {
+void expectMemcmp(int expectation, const char* left, string_handle right, size_t length)
+{
     expectSameSign(-expectation, right.memcmp(left, length));
 }
 
-void testMemcmp(const char* string1, const char* string2, size_t length) {
+void testMemcmp(const char* string1, const char* string2, size_t length)
+{
     pool p;
     auto interned1 = p.intern(string1);
     auto interned2 = p.intern(string2);
@@ -29,23 +32,28 @@ void testMemcmp(const char* string1, const char* string2, size_t length) {
     expectMemcmp(expectedComparison, string1, interned2, length);
 }
 
-TEST(Memcmp, Self) {
+TEST(Memcmp, Self)
+{
     testMemcmp("abc", "abc", 3);
 }
 
-TEST(Memcmp, Length1_14) {
+TEST(Memcmp, Length1_14)
+{
     testMemcmp("a", "leaf0123456789", 1);
 }
 
-TEST(Memcmp, Length14_14) {
+TEST(Memcmp, Length14_14)
+{
     testMemcmp("leaf0123456789", "leaf0123456788", 14);
 }
 
-TEST(Memcmp, Length10_11) {
+TEST(Memcmp, Length10_11)
+{
     testMemcmp("0123456789", "01234567891", 10);
 }
 
-TEST(Memcmp, ConcatAtomConcatLongLong) {
+TEST(Memcmp, ConcatAtomConcatLongLong)
+{
     pool p;
     auto a = p.concat(
         p.intern("a"),
@@ -60,8 +68,8 @@ TEST(Memcmp, ConcatAtomConcatLongLong) {
     expectMemcmp(-1, a, b, 29);
 }
 
-
-TEST(Memcmp, ConcatLongLong) {
+TEST(Memcmp, ConcatLongLong)
+{
     pool p;
     auto a = p.concat(
         p.intern("leaf0123456789"),

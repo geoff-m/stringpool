@@ -15,7 +15,9 @@ add_executable(test-stringpool
         src/ToStringTests.cpp
         src/CharIteratorTests.cpp
         src/ReverseCharIteratorTests.cpp
-        src/AllocatorTests.cpp)
+        src/AllocatorTests.cpp
+        src/MoveTests.cpp
+        src/AssignTests.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 

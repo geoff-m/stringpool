@@ -37,6 +37,7 @@ string_handle::string_handle(const string_handle& other)
 string_handle::string_handle(string_handle&& other) noexcept
     : data(other.data), owner(other.owner)
 {
+    other.data = nullptr;
     // move constructor; no refcount change
 }
 
@@ -64,6 +65,7 @@ string_handle& string_handle::operator=(string_handle&& other) noexcept
         return *this;
     data = other.data;
     owner = other.owner;
+    other.data = nullptr;
     return *this;
 }
 
