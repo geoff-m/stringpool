@@ -9,7 +9,6 @@
 
 using namespace stringpool;
 
-#ifdef STRINGPOOL_TRACK_OWNERS
 string_handle::string_handle(const char* data, pool* owner)
     : data(data), owner(owner)
 {
@@ -17,24 +16,10 @@ string_handle::string_handle(const char* data, pool* owner)
     refcount_increment();
 #endif
 }
-#else
-string_handle::string_handle(const char* data)
-    : data(data)
-{
 
-
-
-#ifdef STRINGPOOL_REFCOUNT_ENABLE
-refcount_increment();
-#endif
-}
-#endif
 
 string_handle::string_handle(string_handle& other)
-    : data(other.data)
-#ifdef STRINGPOOL_TRACK_OWNERS
-      , owner(other.owner)
-#endif
+    : data(other.data), owner(other.owner)
 {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
@@ -42,10 +27,7 @@ string_handle::string_handle(string_handle& other)
 }
 
 string_handle::string_handle(const string_handle& other)
-    : data(other.data)
-#ifdef STRINGPOOL_TRACK_OWNERS
-      , owner(other.owner)
-#endif
+    : data(other.data), owner(other.owner)
 {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
@@ -53,10 +35,7 @@ string_handle::string_handle(const string_handle& other)
 }
 
 string_handle::string_handle(string_handle&& other) noexcept
-    : data(other.data)
-#ifdef STRINGPOOL_TRACK_OWNERS
-      , owner(other.owner)
-#endif
+    : data(other.data), owner(other.owner)
 {
     // move constructor; no refcount change
 }
@@ -70,9 +49,7 @@ string_handle& string_handle::operator=(const string_handle& other) noexcept
     refcount_decrement();
 #endif
     data = other.data;
-#ifdef STRINGPOOL_TRACK_OWNERS
     owner = other.owner;
-#endif
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
 #endif
@@ -86,14 +63,11 @@ string_handle& string_handle::operator=(string_handle&& other) noexcept
     if (this == &other)
         return *this;
     data = other.data;
-#ifdef STRINGPOOL_TRACK_OWNERS
     owner = other.owner;
-#endif
     return *this;
 }
 
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-
 void string_handle::refcount_inc(char* data)
 {
     ++get_refcount(data);
