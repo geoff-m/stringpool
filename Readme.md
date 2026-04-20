@@ -5,22 +5,23 @@ A string interning library with concatenation.
 The string pool offers just one main function, `intern`,
 whose usage is simple.
 `intern` takes a string argument and returns a `string_handle`
-representing a cached version of the data in the given string,
+representing a cached version of the given string,
 inserting it into the pool's cache if not already present.
-Once added to the pool, strings live there until the pool is destroyed.
+Once added to the pool, strings live there until their reference count drops to zero.
+If you disable reference counting (pass `-DSTRINGPOOL_REFCOUNT_ENABLE=OFF` to CMake),
+strings will instead persist until the pool is destroyed.
 
 You can then store these handles in place of your normal strings.
 In this way, you can achieve deduplication by sacrificing a bit of convenience.
 
 ### string_handle
-A `string_handle` is a pointer-sized object that refers to a
-string that lives in a `pool`.
+A `string_handle` is a small object that refers to a string that lives in a `pool`.
 It is like a `const std::string` or `const char*` for most intents and purposes,
 with the caveat that there is no API for viewing it as a single contiguous buffer.
 Nevertheless, it has a rich set of accessors:
  - `size()`/`length()`
  - `copy(char* destination, size_t length)`
- - `to_string()` - create a std::string copy
+ - `to_string()` - create a `std::string` copy
  - `hash()` - get a non-cryptographic hash
  - `begin()`/`end()` - char iterators
  - `rbegin()`/`rend()` - backward char iterators
@@ -35,7 +36,7 @@ Nevertheless, it has a rich set of accessors:
  - `visit_chunks(void (*callback)(const char* chunk, size_t chunk_size, void* state), void* state)`
  - `visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state)`
 
-### Efficiently accessing interned strings
+### Efficiently accessing interned strings with `visit_chunks`
 Although iterator functions are provided
 for convenience, these access the string only a char at a time
 and should be avoided whenever speed is a concern.
@@ -53,7 +54,7 @@ represented by the `string_handle`.
 The opaque `state` argument is also passed to the callback unmodified
 and is not used by `visit_chunks` for any other purpose.
 The sequence of chunks presented to the callback
-represents a partitioning of the string.
+represents a sequential partitioning of the string.
 
 In the worst case, each of these chunks will be of size 1,
 which makes `visit_chunks` no better than the char iterator approach.
@@ -88,7 +89,7 @@ identical to all the other lines:
 ```c++
 auto path1 = p.intern("/foo/bar/baz");
 auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
-auto path2 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
-auto path3 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
-auto path4 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
+auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
+auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
+auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
 ```

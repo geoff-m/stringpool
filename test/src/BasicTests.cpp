@@ -71,6 +71,20 @@ TEST(Basic, ConcatDedup) {
     expectEqual(iab, concatAgain);
 }
 
+TEST(Basic, ConcatDedupReadmeExample)
+{
+    pool p;
+    auto path1 = p.intern("/foo/bar/baz");
+    auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
+    auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
+    auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
+    auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
+    EXPECT_TRUE(path1 == path2);
+    EXPECT_TRUE(path1 == path3);
+    EXPECT_TRUE(path1 == path4);
+    EXPECT_TRUE(path1 == path5);
+}
+
 TEST(Basic, Concat8Plus8) {
     pool p;
     auto ia = p.intern("aaaaaaaa");
