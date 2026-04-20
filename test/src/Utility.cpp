@@ -33,6 +33,8 @@ void expectSameSign(int x, int y) {
 
 void expectEqual(const string_handle interned, const char* str) {
     const auto len = strlen(str);
+    bool eq =  interned.equals(str, len);
+    EXPECT_TRUE(eq);
     EXPECT_TRUE(interned.equals(str, len));
     EXPECT_TRUE(interned.equals(str));
     EXPECT_EQ(0, interned.strcmp(str));

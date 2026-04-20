@@ -1,4 +1,5 @@
 #pragma once
+#include <atomic>
 #include <cstddef>
 #include <deque>
 #include <list>
@@ -9,11 +10,28 @@
 #include <vector>
 #include <iterator>
 
-namespace stringpool {
+namespace stringpool
+{
+    namespace internal
+    {
+        class weak_string_handle;
+    }
+
+    struct allocator
+    {
+        virtual ~allocator() = default;
+
+        virtual char* allocate(size_t size) = 0;
+
+        virtual void deallocate(char* ptr, size_t size) = 0;
+    };
+
     class pool;
 
-    class string_handle {
+    class string_handle
+    {
         friend class pool;
+        friend class internal::weak_string_handle;
         const char* data;
 
 #ifdef STRINGPOOL_TRACK_OWNERS
@@ -26,7 +44,8 @@ namespace stringpool {
 
         string_handle() = default;
 
-        class tree_walker {
+        class tree_walker
+        {
             // We assume this won't change during the lifetime of this object.
             // This is currently upheld by users of this class.
             const char* root;
@@ -43,7 +62,8 @@ namespace stringpool {
             [[nodiscard]] bool operator==(const tree_walker&) const = default;
         };
 
-        class reverse_tree_walker {
+        class reverse_tree_walker
+        {
             const char* root;
             std::deque<const char*> toVisit;
 
@@ -57,9 +77,14 @@ namespace stringpool {
             [[nodiscard]] bool operator==(const reverse_tree_walker&) const = default;
         };
 
-        [[nodiscard]] static bool concat_equals(string_handle single, string_handle left, string_handle right);
+        [[nodiscard]] static bool concat_equals(const char* single, const char* left, const char* right);
 
-        class char_iterator_forward {
+        [[nodiscard]] static bool equals(const char* leftNode, const char* rightString, size_t length);
+
+        [[nodiscard]] static int memcmp(const char* leftNode, const char* rhs, size_t length);
+
+        class char_iterator_forward
+        {
             tree_walker walker;
             const char* chunk;
             size_t chunkSize;
@@ -90,7 +115,8 @@ namespace stringpool {
 
         static_assert(std::forward_iterator<char_iterator_forward>);
 
-        class char_iterator_backward {
+        class char_iterator_backward
+        {
             reverse_tree_walker walker;
             const char* chunk;
             size_t chunkSize;
@@ -121,7 +147,40 @@ namespace stringpool {
 
         static_assert(std::forward_iterator<char_iterator_backward>);
 
+        void refcount_decrement();
+
+        static void refcount_inc(char* data);
+        void refcount_increment();
+
+        static void refcount_dec(char* data, pool& owner);
+        static void refcount_dec_unsafe(char* data, pool& owner);
+
+        // Returns true if reference count reached zero.
+        static bool refcount_dec_prefix(char* data);
+
+        static void actually_delete_unsafe(char* data, pool& owner, size_t hash);
+
+        static void maybe_decrement_children_refcounts(char* data, pool& owner);
+
+        static void visit_chunks(const char* node,
+                                 void (*callback)(const char* piece, size_t pieceSize, void* state),
+                                 void* state);
+
+        static size_t copy(const char* data, char* destination, size_t destination_size);
+
     public:
+        string_handle(string_handle& other);
+
+        string_handle(const string_handle& other);
+
+        string_handle(string_handle&& other) noexcept;
+
+        string_handle& operator=(const string_handle& other) noexcept;
+
+        string_handle& operator=(string_handle&& other) noexcept;
+
+        ~string_handle();
+
         /**
          * Gets the length of the string represented by this instance.
          * Same as string_handle::length.
@@ -249,11 +308,36 @@ namespace stringpool {
         [[nodiscard]] char_iterator_backward rend() const;
     };
 
-    class pool {
+    namespace internal
+    {
+        class weak_string_handle
+        {
+            friend class stringpool::pool;
+            friend class stringpool::string_handle;
+            const char* data;
+
+#ifdef STRINGPOOL_TRACK_OWNERS
+            stringpool::pool* owner;
+
+            weak_string_handle(const char* data, pool* owner);
+#else
+            weak_string_handle(const char* data);
+#endif
+
+            [[nodiscard]] stringpool::string_handle make_strong() const;
+
+            weak_string_handle() = default;
+        };
+    }
+
+    class pool
+    {
         std::vector<char*> data;
         size_t totalDataSize = 0;
 
         [[nodiscard]] char* add_buffer(size_t size);
+
+        void free_buffer(char* node);
 
         friend class string_handle;
 
@@ -262,110 +346,15 @@ namespace stringpool {
 
         // key: hash
         // value: list of strings having that hash
-        std::unordered_map<size_t, std::list<string_handle>> table;
-
-        class reader_lock {
-            using TReaderLock = std::shared_lock<std::shared_mutex>;
-            TReaderLock lock1;
-            TReaderLock lock2;
-            TReaderLock lock3;
-
-        public:
-            explicit reader_lock(TReaderLock&& heldLock)
-                : lock1(std::move(heldLock)) {
-            }
-
-            reader_lock(TReaderLock&& unheldLock1, TReaderLock&& unheldLock2)
-                : lock1(std::move(unheldLock1)), lock2(std::move(unheldLock2)) {
-                std::lock(lock1, lock2);
-            }
-
-            reader_lock(TReaderLock&& unheldLock1, TReaderLock&& unheldLock2, TReaderLock&& unheldLock3)
-                : lock1(std::move(unheldLock1)), lock2(std::move(unheldLock2)), lock3(std::move(unheldLock3)) {
-                std::lock(lock1, lock2, lock3);
-            }
-
-            void unlock() {
-                lock1.unlock();
-                if (lock2.owns_lock())
-                    lock2.unlock();
-                if (lock3.owns_lock())
-                    lock3.unlock();
-            }
-        };
-
-        class writer_lock {
-            using TWriterLock = std::unique_lock<std::shared_mutex>;
-            TWriterLock lock1;
-            TWriterLock lock2;
-
-        public:
-            explicit writer_lock(TWriterLock&& heldLock)
-                : lock1(std::move(heldLock)) {
-            }
-
-            writer_lock(TWriterLock&& unheldLock1, TWriterLock&& unheldLock2)
-                : lock1(std::move(unheldLock1)), lock2(std::move(unheldLock2)) {
-                std::lock(lock1, lock2);
-            }
-        };
-
-        class writer_lock_reader_locks {
-            using TWriterLock = std::unique_lock<std::shared_mutex>;
-            using TReaderLock = std::shared_lock<std::shared_mutex>;
-            TWriterLock writeLock;
-            TReaderLock readLock1;
-            TReaderLock readLock2;
-
-        public:
-            writer_lock_reader_locks(TWriterLock&& unheldWriteLock)
-                : writeLock(std::move(unheldWriteLock)) {
-                writeLock.lock();
-            }
-
-            writer_lock_reader_locks(TWriterLock&& unheldWriteLock, TReaderLock&& unheldReadLock1)
-                : writeLock(std::move(unheldWriteLock)), readLock1(std::move(unheldReadLock1)) {
-                std::lock(writeLock, readLock1);
-            }
-
-            writer_lock_reader_locks(TWriterLock&& unheldWriteLock, TReaderLock&& unheldReadLock1,
-                                     TReaderLock&& unheldReadLock2)
-                : writeLock(std::move(unheldWriteLock)), readLock1(std::move(unheldReadLock1)),
-                  readLock2(std::move(unheldReadLock2)) {
-                std::lock(writeLock, readLock1, readLock2);
-            }
-
-            ~writer_lock_reader_locks() {
-                writeLock.unlock();
-                if (readLock1.owns_lock())
-                    readLock1.unlock();
-                if (readLock2.owns_lock())
-                    readLock2.unlock();
-            }
-        };
-
-        [[nodiscard]] static reader_lock lock_for_reading(pool& p) {
-            return reader_lock(std::shared_lock(p.tableRwMutex));
-        }
-
-        [[nodiscard]] static reader_lock lock_for_reading(pool& p1, pool& p2) {
-            if (&p1 == &p2)
-                return lock_for_reading(p1);
-            return reader_lock(
-                std::shared_lock(p1.tableRwMutex, std::defer_lock),
-                std::shared_lock(p2.tableRwMutex, std::defer_lock));
-        }
-
-        [[nodiscard]] static writer_lock lock_for_writing(pool& p1) {
-            return writer_lock(std::unique_lock(p1.tableRwMutex));
-        }
+        std::unordered_map<size_t, std::list<internal::weak_string_handle>> table;
 
         // These functions are not thread-safe.
-        char* add_atom_unsafe(const char* string, size_t stringSize);
+        char* add_atom_unsafe(const char* string, size_t stringSize, size_t hash);
 
-        string_handle add_concat_unsafe(size_t hash, string_handle left, string_handle right);
+        internal::weak_string_handle add_concat_unsafe(size_t hash, string_handle left, string_handle right);
 
-        enum class InternResult {
+        enum class InternResult
+        {
             Success = 0,
             NeedWriterLock = 1
         };
@@ -375,7 +364,7 @@ namespace stringpool {
                                       const char* string,
                                       size_t size,
                                       bool haveWriterLock,
-                                      string_handle& result);
+                                      internal::weak_string_handle& result);
 
         // Caller must hold reader (or writer) lock on this and left and right owners.
         InternResult do_concat_unsafe(
@@ -383,7 +372,7 @@ namespace stringpool {
             string_handle left,
             string_handle right,
             bool haveWriterLock,
-            string_handle& result);
+            internal::weak_string_handle& result);
 
         // Statistics.
         size_t totalInternRequestSize = 0;
@@ -391,7 +380,14 @@ namespace stringpool {
         size_t internHits = 0;
         size_t internMisses = 0;
 
+        allocator* alloc;
+
     public:
+        /**
+         * Creates a new stringpool.
+         */
+        pool();
+
         /**
          * Creates a new stringpool.
          * @param initial_table_capacity Initial capacity of the internal table, which has one entry for each interned string.
@@ -400,8 +396,18 @@ namespace stringpool {
 
         /**
          * Creates a new stringpool.
+         * @param initial_table_capacity Initial capacity of the internal table, which has one entry for each interned string.
+         * @param allocator An allocator that will be used for string data.
+         * Some other metadata will still use the default heap allocator.
          */
-        pool();
+        pool(size_t initial_table_capacity, stringpool::allocator* allocator);
+
+        /**
+         * Creates a new stringpool.
+         * @param allocator An allocator that will be used for string data.
+         * Some other metadata will still use the default heap allocator.
+         */
+        pool(stringpool::allocator* allocator);
 
         ~pool();
 
@@ -467,9 +473,11 @@ bool operator==(const stringpool::string_handle& lhs, const stringpool::string_h
 
 bool operator!=(const stringpool::string_handle& lhs, const stringpool::string_handle& rhs);
 
-template<>
-struct std::hash<stringpool::string_handle> {
-    std::size_t operator()(stringpool::string_handle const& s) const noexcept {
+template <>
+struct std::hash<stringpool::string_handle>
+{
+    std::size_t operator()(stringpool::string_handle const& s) const noexcept
+    {
         return s.hash();
     }
 };

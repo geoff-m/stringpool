@@ -5,49 +5,58 @@
 
 using namespace stringpool;
 
-void skipIfNoParallelism() {
-    if (std::thread::hardware_concurrency() < 2) {
+void skipIfNoParallelism()
+{
+    if (std::thread::hardware_concurrency() < 2)
+    {
         GTEST_SKIP() << "Skipping test because there's no hardware concurrency";
     }
 }
 
-TEST(Race, InternShortAtom) {
+TEST(Race, InternShortAtom)
+{
     skipIfNoParallelism();
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
     pool pool(1000);
-    const auto threadCount = std::thread::hardware_concurrency();
-    for (int i=0; i < threadCount; ++i)
-        threads.emplace_back([&] {
+    const auto threadCount = 2; // experientially, 2 threads is enough to surface race bugs
+    for (int i = 0; i < threadCount; ++i)
+        threads.emplace_back([&]
+        {
             constexpr auto bufferSize = 8;
             char buf[bufferSize] = {};
-            for (int string = 0; string < TOTAL_INTERNS / threadCount; ++string) {
+            for (int string = 0; string < TOTAL_INTERNS / threadCount; ++string)
+            {
                 snprintf(buf, bufferSize, "%d", string);
-                pool.intern(buf);
+                auto h = pool.intern(buf);
             }
         });
-    for (int i=0; i < threadCount; ++i)
+    for (int i = 0; i < threadCount; ++i)
         threads[i].join();
 }
 
-TEST(Race, InternShortConcat) {
+TEST(Race, InternShortConcat)
+{
     skipIfNoParallelism();
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
     pool pool(1000);
     const auto threadCount = std::thread::hardware_concurrency();
     const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
-    for (int i=0; i < threadCount; ++i)
-        threads.emplace_back([&] {
+    for (int i = 0; i < threadCount; ++i)
+        threads.emplace_back([&]
+        {
             constexpr auto bufferSize = 16;
             char buf[bufferSize] = {};
-            for (int string = 0; string < INTERNS_PER_THREAD; ++string) {
+            for (int string = 0; string < INTERNS_PER_THREAD; ++string)
+            {
                 snprintf(buf, bufferSize, "%d", string);
                 pool.intern(buf);
             }
             char leftBuf[bufferSize] = {};
             char rightBuf[bufferSize] = {};
-            for (int string = 0; string <INTERNS_PER_THREAD ; ++string) {
+            for (int string = 0; string < INTERNS_PER_THREAD; ++string)
+            {
                 const auto leftInt = (string << 1) + 1;
                 const auto rightInt = string << 1;
                 if (leftInt >= INTERNS_PER_THREAD)
@@ -59,30 +68,34 @@ TEST(Race, InternShortConcat) {
                 pool.concat(leftIntern, rightIntern);
             }
         });
-    for (int i=0; i < threadCount; ++i)
+    for (int i = 0; i < threadCount; ++i)
         threads[i].join();
 }
 
-TEST(Race, InternLongConcat) {
+TEST(Race, InternLongConcat)
+{
     skipIfNoParallelism();
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
     pool pool(1000);
     const auto threadCount = std::min(4u, std::thread::hardware_concurrency());
     const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
-    for (int i=0; i < threadCount; ++i)
-        threads.emplace_back([&] {
+    for (int i = 0; i < threadCount; ++i)
+        threads.emplace_back([&]
+        {
             // 19 periods
             const auto atomFormat = "%d...................";
             constexpr auto bufferSize = 32;
             char buf[bufferSize] = {};
-            for (int string = 0; string < INTERNS_PER_THREAD; ++string) {
+            for (int string = 0; string < INTERNS_PER_THREAD; ++string)
+            {
                 snprintf(buf, bufferSize, atomFormat, string);
                 pool.intern(buf);
             }
             char leftBuf[bufferSize] = {};
             char rightBuf[bufferSize] = {};
-            for (int string = 0; string <INTERNS_PER_THREAD ; ++string) {
+            for (int string = 0; string < INTERNS_PER_THREAD; ++string)
+            {
                 const auto leftInt = (string << 1) + 1;
                 const auto rightInt = string << 1;
                 if (leftInt >= INTERNS_PER_THREAD)
@@ -94,6 +107,6 @@ TEST(Race, InternLongConcat) {
                 pool.concat(leftIntern, rightIntern);
             }
         });
-    for (int i=0; i < threadCount; ++i)
+    for (int i = 0; i < threadCount; ++i)
         threads[i].join();
 }

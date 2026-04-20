@@ -52,3 +52,4 @@ bool string_handle::char_iterator_backward::operator==(const char_iterator_backw
 bool string_handle::char_iterator_backward::operator!=(const char_iterator_backward& other) const {
     return !(*this == other);
 }
+
