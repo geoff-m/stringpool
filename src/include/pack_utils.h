@@ -3,6 +3,12 @@
 #include <cstddef>
 #include <cstdint>
 
+namespace stringpool
+{
+    struct concat_node;
+    struct node;
+}
+
 enum class EntryType : uint8_t {
     ATOM = 0,
     SHORT_ATOM = 1,
@@ -67,18 +73,6 @@ namespace offsets {
     }
 }
 
-namespace sizes {
-#ifdef STRINGPOOL_REFCOUNT_ENABLE
-    constexpr int ATOM = 32;
-    constexpr int SHORT_ATOM = 18;
-    constexpr int CONCAT = 40;
-#else
-    constexpr int ATOM = 24;
-    constexpr int SHORT_ATOM = 10;
-    constexpr int CONCAT = 32;
-#endif
-}
-
 constexpr int MAX_SHORT_ATOM_STRING_LENGTH = 255;
 
 [[nodiscard]] inline size_t min(const size_t x, const size_t y) {
@@ -88,24 +82,22 @@ constexpr int MAX_SHORT_ATOM_STRING_LENGTH = 255;
 // Gets the total size the atom would have that contained a string of the given length.
 [[nodiscard]] size_t compute_atom_size(size_t stringLength, EntryType* outputType);
 
-[[nodiscard]] EntryType get_node_type(const char* node);
+[[nodiscard]] EntryType get_node_type(const stringpool::node* node);
 
-[[nodiscard]] bool is_concat(const char* node);
+[[nodiscard]] bool is_concat(const stringpool::node* node);
 
-[[nodiscard]] size_t get_length(const char* node);
+[[nodiscard]] size_t get_length(const stringpool::node* node);
 
-[[nodiscard]] const char* get_string_from_leaf(const char* node);
+[[nodiscard]] const char* get_string_from_leaf(const stringpool::node* node);
 
-// Returns true iff the child is a leaf.
-[[nodiscard]] const char* get_left_child(const char* concatNode);
+[[nodiscard]] stringpool::node* get_left_child(const stringpool::concat_node* concatNode);
 
-// Returns true iff the child is a leaf.
-[[nodiscard]] const char* get_right_child(const char* concatNode);
+[[nodiscard]] stringpool::node* get_right_child(const stringpool::concat_node* concatNode);
 
 [[nodiscard]] const char* node_type_to_string(EntryType type);
 
-[[nodiscard]] size_t get_hash(const char* node);
+[[nodiscard]] size_t get_hash(const stringpool::node* node);
 
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-[[nodiscard]] std::atomic_ref<size_t> get_refcount(char* node);
+[[nodiscard]] std::atomic_ref<size_t> get_refcount(stringpool::node* node);
 #endif

@@ -9,14 +9,13 @@
 
 using namespace stringpool;
 
-string_handle::string_handle(const char* data, pool* owner)
+string_handle::string_handle(node* data, pool* owner)
     : data(data), owner(owner)
 {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
 #endif
 }
-
 
 string_handle::string_handle(string_handle& other)
     : data(other.data), owner(other.owner)
@@ -70,28 +69,29 @@ string_handle& string_handle::operator=(string_handle&& other) noexcept
 }
 
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-void string_handle::refcount_inc(char* data)
+void string_handle::refcount_inc(node* data)
 {
     ++get_refcount(data);
 }
 
 void string_handle::refcount_increment()
 {
-    refcount_inc(const_cast<char*>(data));
+    refcount_inc(data);
 }
 
-void string_handle::maybe_decrement_children_refcounts(char* data, pool& owner)
+void string_handle::maybe_decrement_children_refcounts(node* data, pool& owner)
 {
     if (get_node_type(data) == EntryType::CONCAT)
     {
-        auto* left = const_cast<char*>(get_left_child(data));
-        auto* right = const_cast<char*>(get_right_child(data));
+        const auto* concatData = reinterpret_cast<const concat_node*>(data);
+        auto* left = get_left_child(concatData);
+        auto* right = get_right_child(concatData);
         refcount_dec_unsafe(left, owner);
         refcount_dec_unsafe(right, owner);
     }
 }
 
-void string_handle::actually_delete_unsafe(char* data, pool& owner, size_t hash)
+void string_handle::actually_delete_unsafe(node* data, pool& owner, size_t hash)
 {
     auto tableIt = owner.table.find(hash);
     if (tableIt == owner.table.end())
@@ -122,7 +122,7 @@ void string_handle::actually_delete_unsafe(char* data, pool& owner, size_t hash)
     }
 }
 
-void string_handle::refcount_dec(char* data, pool& owner)
+void string_handle::refcount_dec(node* data, pool& owner)
 {
     const auto hash = get_hash(data);
     if (!refcount_dec_prefix(data))
@@ -132,7 +132,7 @@ void string_handle::refcount_dec(char* data, pool& owner)
     actually_delete_unsafe(data, owner, hash);
 }
 
-void string_handle::refcount_dec_unsafe(char* data, pool& owner)
+void string_handle::refcount_dec_unsafe(node* data, pool& owner)
 {
     const auto hash = get_hash(data);
     if (!refcount_dec_prefix(data))
@@ -140,7 +140,7 @@ void string_handle::refcount_dec_unsafe(char* data, pool& owner)
     actually_delete_unsafe(data, owner, hash);
 }
 
-bool string_handle::refcount_dec_prefix(char* data)
+bool string_handle::refcount_dec_prefix(node* data)
 {
     auto refCount = get_refcount(data);
     const auto newRefCount = --refCount;
@@ -151,7 +151,7 @@ void string_handle::refcount_decrement()
 {
     if (data == nullptr)
         return;
-    refcount_dec(const_cast<char*>(data), *owner);
+    refcount_dec(data, *owner);
 }
 #endif
 
@@ -162,7 +162,7 @@ string_handle::~string_handle()
 #endif
 }
 
-size_t string_handle::copy(const char* data, char* destination, size_t destination_size)
+size_t string_handle::copy(const node* data, char* destination, size_t destination_size)
 {
     if (destination_size == 0)
         return 0;
@@ -196,7 +196,7 @@ size_t string_handle::hash() const
     return h.finish();
 }
 
-void string_handle::visit_chunks(const char* node, void (*callback)(const char* piece, size_t pieceSize, void* state),
+void string_handle::visit_chunks(const node* node, void (*callback)(const char* piece, size_t pieceSize, void* state),
                                  void* state)
 {
     tree_walker walker(node);
@@ -332,7 +332,7 @@ int string_handle::memcmp(const string_handle& rhs, size_t length) const
     return memcmp(data, rhs, length);
 }
 
-int string_handle::memcmp(const char* leftNode, const char* rhs, size_t length)
+int string_handle::memcmp(const node* leftNode, const char* rhs, size_t length)
 {
     tree_walker walker(leftNode);
     const char* piece;
@@ -366,7 +366,7 @@ int string_handle::memcmp(const char* leftNode, const char* rhs, size_t length)
     return 0;
 }
 
-bool string_handle::equals(const char* leftNode, const char* rightString, size_t length)
+bool string_handle::equals(const node* leftNode, const char* rightString, size_t length)
 {
     const auto thisLength = get_length(leftNode);
     if (thisLength != length)
@@ -439,7 +439,7 @@ std::string string_handle::to_string() const
     return ret;
 }
 
-bool string_handle::concat_equals(const char* single, const char* left, const char* right)
+bool string_handle::concat_equals(const node* single, const node* left, const node* right)
 {
     const auto comparandLength = get_length(single);
     const auto leftLength = get_length(left);

@@ -44,17 +44,17 @@ pool::pool(size_t initial_table_capacity, allocator* allocator)
     table.reserve(initial_table_capacity);
 }
 
-[[nodiscard]] static size_t get_buffer_size(const char* buffer)
+[[nodiscard]] static size_t get_buffer_size(const node* buffer)
 {
     const auto type = get_node_type(buffer);
     switch (type)
     {
     case EntryType::ATOM:
-        return sizes::ATOM + get_length(buffer);
+        return sizeof(atom_node) + get_length(buffer);
     case EntryType::SHORT_ATOM:
-        return sizes::SHORT_ATOM + get_length(buffer);
+        return sizeof(short_atom_node) + get_length(buffer);
     case EntryType::CONCAT:
-        return sizes::CONCAT;
+        return sizeof(concat_node);
     default:
         std::abort(); // unreachable.
     }
@@ -68,7 +68,7 @@ pool::~pool()
         auto& list = kvp.second;
         for (auto& listIt : list)
         {
-            free_buffer(const_cast<char*>(listIt.data));
+            free_buffer(listIt.data);
         }
     }
 }
@@ -97,7 +97,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         }
         if (!haveWriterLock)
             return InternResult::NeedWriterLock;
-        char* atom = add_atom_unsafe(string, size, hash);
+        node* atom = add_atom_unsafe(string, size, hash);
         internal::weak_string_handle ret(atom, this);
         existingEntries.push_back(ret);
         result = ret;
@@ -107,7 +107,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     // Nothing in table has this hash.
     if (!haveWriterLock)
         return InternResult::NeedWriterLock;
-    char* atom = add_atom_unsafe(string, size, hash);
+    node* atom = add_atom_unsafe(string, size, hash);
     auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
     internal::weak_string_handle ret(atom, this);
     r.first->second.push_back(ret);
@@ -144,7 +144,7 @@ string_handle pool::intern(std::string_view string)
     return intern(string.data(), string.size());
 }
 
-internal::weak_string_handle::weak_string_handle(const char* data, pool* owner)
+internal::weak_string_handle::weak_string_handle(node* data, pool* owner)
     : data(data), owner(owner)
 {
 }
@@ -154,62 +154,70 @@ string_handle internal::weak_string_handle::make_strong() const
     return stringpool::string_handle(data, owner);
 }
 
-char* pool::add_buffer(size_t size)
-{
-    // todo: ensure alignment.
-    // currently, we assume the allocator will give us regions that are 8-byte aligned
-    // when we need it for (efficient) atomic refcount updates,
-    // but nothing ensures this.
-    // what we can do here is over-allocate if necessary
-    // then waste space (up to 7 bytes) in order to guarantee the region we actually use is aligned.
-    // when such adjustment occurs,
-    // we must have a way to recover the original true size of the allocation request
-    // for when we call deallocate.
-    // a helper function should be able to infer this original size
-    // from the size-in-use and the pointer's value.
-    auto* ret = alloc->allocate(size);
+atom_node* pool::allocate_atom(size_t stringSize) {
+    const auto nodeSize = sizeof(atom_node) + stringSize;
+    auto* ret = alloc->allocate(nodeSize);
     data.emplace_back(ret);
-    totalDataSize += size;
-    return ret;
+    totalDataSize += nodeSize;
+    return reinterpret_cast<atom_node*>(ret);
 }
 
-void pool::free_buffer(char* node)
+short_atom_node* pool::allocate_short_atom(size_t stringSize) {
+    const auto nodeSize = sizeof(short_atom_node) + stringSize;
+    auto* ret = alloc->allocate(nodeSize);
+    data.emplace_back(ret);
+    totalDataSize += nodeSize;
+    return reinterpret_cast<short_atom_node*>(ret);
+}
+
+concat_node* pool::allocate_concat() {
+    const auto nodeSize = sizeof(concat_node);
+    auto* ret = alloc->allocate(nodeSize);
+    data.emplace_back(ret);
+    totalDataSize += nodeSize;
+    return reinterpret_cast<concat_node*>(ret);
+}
+
+
+void pool::free_buffer(node* node)
 {
     const auto size = get_buffer_size(node);
-    alloc->deallocate(node, size);
+    alloc->deallocate(reinterpret_cast<char*>(node), size);
     totalDataSize -= size;
 }
 
-char* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
+node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
 {
     EntryType type;
     const auto blockSize = compute_atom_size(stringSize, &type);
-    char* startOfAtom = add_buffer(blockSize);
     if (type == EntryType::SHORT_ATOM)
     {
-        startOfAtom[offsets::short_atom::NODE_TYPE] = static_cast<char>(EntryType::SHORT_ATOM);
-        *reinterpret_cast<size_t*>(startOfAtom + offsets::short_atom::HASH) = hash;
+        auto* shortAtom = allocate_short_atom(stringSize);
+        shortAtom->type = EntryType::SHORT_ATOM;
+        shortAtom->hash = hash;
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        *reinterpret_cast<size_t*>(startOfAtom + offsets::short_atom::REFCOUNT) = 0;
+        shortAtom->refCount = 0;
 #endif
-        startOfAtom[offsets::short_atom::STRING_LENGTH] = static_cast<char>(stringSize);
-        std::memcpy(startOfAtom + offsets::short_atom::STRING_VALUE, string, stringSize);
-        assert(get_length(startOfAtom) == stringSize);
-        return startOfAtom;
+        shortAtom->length = static_cast<char>(stringSize);
+        std::memcpy(reinterpret_cast<char*>(shortAtom) + sizeof(*shortAtom), string, stringSize);
+        assert(get_length(shortAtom) == stringSize);
+        return shortAtom;
     }
     else
     {
-        if (stringSize != (stringSize & ~UPPER_1_MASK)) [[unlikely]]
+        if (stringSize != (stringSize & ~UPPER_1_MASK)) [[unlikely]] {
             std::abort(); // string is too large.
-        startOfAtom[offsets::atom::NODE_TYPE] = static_cast<char>(EntryType::ATOM);
-        *reinterpret_cast<size_t*>(startOfAtom + offsets::atom::HASH) = hash;
+        }
+        auto* atom = allocate_atom(stringSize);
+        atom->type = EntryType::ATOM;
+        atom->hash = hash;
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        *reinterpret_cast<size_t*>(startOfAtom + offsets::atom::REFCOUNT) = 0;
+        atom->refCount = 0;
 #endif
-        std::memcpy(startOfAtom + offsets::atom::STRING_LENGTH, &stringSize, 7);
-        std::memcpy(startOfAtom + offsets::atom::STRING_VALUE, string, stringSize);
-        assert(get_length(startOfAtom) == stringSize);
-        return startOfAtom;
+        atom->length = stringSize;
+        std::memcpy(reinterpret_cast<char*>(atom) + sizeof(atom_node), string, stringSize);
+        assert(get_length(atom) == stringSize);
+        return atom;
     }
 }
 
@@ -226,21 +234,18 @@ internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle 
     if (totalLength <= MAX_SHORT_ATOM_STRING_LENGTH)
     {
         // We will store the concatenation as a single atom node.
-        EntryType type;
-        const auto atomSize = compute_atom_size(totalLength, &type);
-        assert(type == EntryType::SHORT_ATOM);
-        char* startOfAtom = add_buffer(atomSize);
+        short_atom_node* shortAtom = allocate_short_atom(totalLength);
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        *reinterpret_cast<size_t*>(startOfAtom + offsets::short_atom::REFCOUNT) = 0;
+        *reinterpret_cast<size_t*>(shortAtom + offsets::short_atom::REFCOUNT) = 0;
 #endif
-        startOfAtom[offsets::short_atom::NODE_TYPE] = static_cast<char>(EntryType::SHORT_ATOM);
-        *reinterpret_cast<size_t*>(startOfAtom + offsets::short_atom::HASH) = hash;
-        startOfAtom[offsets::short_atom::STRING_LENGTH] = static_cast<char>(totalLength);
-        left.copy(startOfAtom + offsets::short_atom::STRING_VALUE, leftLength);
-        right.copy(startOfAtom + offsets::short_atom::STRING_VALUE + leftLength, rightLength);
-        assert(get_length(startOfAtom) == totalLength);
+        shortAtom->type = EntryType::SHORT_ATOM;
+        shortAtom->hash = hash;
+        shortAtom->length =  static_cast<char>(totalLength);
+        left.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node), leftLength);
+        right.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node)+ leftLength, rightLength);
+        assert(get_length(shortAtom) == totalLength);
         auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
-        internal::weak_string_handle ret(startOfAtom, this);
+        internal::weak_string_handle ret(shortAtom, this);
         r.first->second.push_back(ret);
         return ret;
     }
@@ -249,16 +254,15 @@ internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle 
         // We will store the concatenation as a concat node.
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
-        const auto blockSize = sizes::CONCAT;
-        char* concat = add_buffer(blockSize);
+        concat_node* concat = allocate_concat();
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        *reinterpret_cast<size_t*>(concat + offsets::concat::REFCOUNT) = 0;
+        concat->refCount = 0;
 #endif
-        concat[offsets::concat::NODE_TYPE] = static_cast<char>(EntryType::CONCAT);
-        *reinterpret_cast<size_t*>(concat + offsets::concat::HASH) = hash;
-        std::memcpy(concat + offsets::concat::STRING_LENGTH, &totalLength, 7);
-        std::memcpy(concat + offsets::concat::LEFT_PTR, &left.data, 8);
-        std::memcpy(concat + offsets::concat::RIGHT_PTR, &right.data, 8);
+        concat->type = EntryType::CONCAT;
+        concat->hash = hash;
+        concat->length = totalLength;
+        concat->left = left.data;
+        concat->right = right.data;
         auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
         left.refcount_increment();
