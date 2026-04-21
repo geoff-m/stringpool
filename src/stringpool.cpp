@@ -1,11 +1,11 @@
 #include "stringpool/stringpool.h"
 #include "include/hash.h"
-#include "include/pack_utils.h"
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
 
 using namespace stringpool;
+using namespace stringpool::internal;
 
 class default_allocator : public allocator
 {
@@ -46,8 +46,7 @@ pool::pool(size_t initial_table_capacity, allocator* allocator)
 
 [[nodiscard]] static size_t get_buffer_size(const node* buffer)
 {
-    const auto type = get_node_type(buffer);
-    switch (type)
+    switch (buffer->type)
     {
     case EntryType::ATOM:
         return sizeof(atom_node) + get_length(buffer);
@@ -80,7 +79,7 @@ string_handle pool::intern(const char* string)
 
 // Attempts to intern the given string, or else return its handle if it already exists in the cache.
 pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_t size, bool haveWriterLock,
-                                          internal::weak_string_handle& result)
+                                          weak_string_handle& result)
 {
     auto it = table.find(hash);
     if (it != table.end())
@@ -98,7 +97,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         if (!haveWriterLock)
             return InternResult::NeedWriterLock;
         node* atom = add_atom_unsafe(string, size, hash);
-        internal::weak_string_handle ret(atom, this);
+        weak_string_handle ret(atom, this);
         existingEntries.push_back(ret);
         result = ret;
         ++internMisses;
@@ -108,8 +107,8 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     if (!haveWriterLock)
         return InternResult::NeedWriterLock;
     node* atom = add_atom_unsafe(string, size, hash);
-    auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
-    internal::weak_string_handle ret(atom, this);
+    auto r = table.emplace(hash, std::list<weak_string_handle>());
+    weak_string_handle ret(atom, this);
     r.first->second.push_back(ret);
     result = ret;
     ++internMisses;
@@ -122,7 +121,7 @@ string_handle pool::intern(const char* string, size_t size)
     std::shared_lock readLock(tableRwMutex);
     ++totalInternRequestCount;
     totalInternRequestSize += size;
-    internal::weak_string_handle result{};
+    weak_string_handle result{};
     auto resultWithRead = do_intern_unsafe(hash, string, size, false, result);
     if (resultWithRead == InternResult::NeedWriterLock)
     {
@@ -144,14 +143,14 @@ string_handle pool::intern(std::string_view string)
     return intern(string.data(), string.size());
 }
 
-internal::weak_string_handle::weak_string_handle(node* data, pool* owner)
+weak_string_handle::weak_string_handle(node* data, pool* owner)
     : data(data), owner(owner)
 {
 }
 
-string_handle internal::weak_string_handle::make_strong() const
+string_handle weak_string_handle::make_strong() const
 {
-    return stringpool::string_handle(data, owner);
+    return string_handle(data, owner);
 }
 
 atom_node* pool::allocate_atom(size_t stringSize) {
@@ -188,9 +187,7 @@ void pool::free_buffer(node* node)
 
 node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
 {
-    EntryType type;
-    const auto blockSize = compute_atom_size(stringSize, &type);
-    if (type == EntryType::SHORT_ATOM)
+    if (stringSize <= MAX_SHORT_ATOM_STRING_LENGTH)
     {
         auto* shortAtom = allocate_short_atom(stringSize);
         shortAtom->type = EntryType::SHORT_ATOM;
@@ -200,12 +197,12 @@ node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
 #endif
         shortAtom->length = static_cast<char>(stringSize);
         std::memcpy(reinterpret_cast<char*>(shortAtom) + sizeof(*shortAtom), string, stringSize);
-        assert(get_length(shortAtom) == stringSize);
+        assert(internal::get_length(shortAtom) == stringSize);
         return shortAtom;
     }
     else
     {
-        if (stringSize != (stringSize & ~UPPER_1_MASK)) [[unlikely]] {
+        if (stringSize != (stringSize & 0x00ffffffffffffff)) [[unlikely]] {
             std::abort(); // string is too large.
         }
         auto* atom = allocate_atom(stringSize);
@@ -216,7 +213,7 @@ node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
 #endif
         atom->length = stringSize;
         std::memcpy(reinterpret_cast<char*>(atom) + sizeof(atom_node), string, stringSize);
-        assert(get_length(atom) == stringSize);
+        assert(internal::get_length(atom) == stringSize);
         return atom;
     }
 }
@@ -226,7 +223,7 @@ static void addToHash(const char* piece, size_t size, void* pHasher)
     static_cast<hasher*>(pHasher)->add(piece, size);
 }
 
-internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_handle right)
+weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, string_handle right)
 {
     const auto leftLength = get_length(left.data);
     const auto rightLength = get_length(right.data);
@@ -236,7 +233,7 @@ internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle 
         // We will store the concatenation as a single atom node.
         short_atom_node* shortAtom = allocate_short_atom(totalLength);
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-        *reinterpret_cast<size_t*>(shortAtom + offsets::short_atom::REFCOUNT) = 0;
+        shortAtom->refCount = 0;
 #endif
         shortAtom->type = EntryType::SHORT_ATOM;
         shortAtom->hash = hash;
@@ -244,8 +241,8 @@ internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle 
         left.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node), leftLength);
         right.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node)+ leftLength, rightLength);
         assert(get_length(shortAtom) == totalLength);
-        auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
-        internal::weak_string_handle ret(shortAtom, this);
+        auto r = table.emplace(hash, std::list<weak_string_handle>());
+        weak_string_handle ret(shortAtom, this);
         r.first->second.push_back(ret);
         return ret;
     }
@@ -263,12 +260,12 @@ internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle 
         concat->length = totalLength;
         concat->left = left.data;
         concat->right = right.data;
-        auto r = table.emplace(hash, std::list<internal::weak_string_handle>());
+        auto r = table.emplace(hash, std::list<weak_string_handle>());
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
         left.refcount_increment();
         right.refcount_increment();
 #endif
-        internal::weak_string_handle ret(concat, this);
+        weak_string_handle ret(concat, this);
         r.first->second.push_back(ret);
         return ret;
     }
@@ -276,7 +273,7 @@ internal::weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle 
 
 // Attempts to intern the concatenation of the given string handles, or else return its handle if it already exists in the cache.
 pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, string_handle right, bool haveWriterLock,
-                                          internal::weak_string_handle& result)
+                                          weak_string_handle& result)
 {
     auto it = table.find(hash);
     if (it == table.end())
@@ -311,7 +308,7 @@ string_handle pool::concat(string_handle left, string_handle right)
     left.visit_chunks(addToHash, &h);
     right.visit_chunks(addToHash, &h);
     const auto hash = h.finish();
-    internal::weak_string_handle result{};
+    weak_string_handle result{};
     auto readResult = do_concat_unsafe(hash, left, right, false, result);
     if (readResult == InternResult::NeedWriterLock)
     {

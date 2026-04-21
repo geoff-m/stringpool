@@ -10,17 +10,79 @@
 #include <vector>
 #include <iterator>
 
-// todo: fix
-#include "../../src/include/pack_utils.h"
-
 namespace stringpool
 {
-    struct node;
+    class string_handle;
+    class pool;
 
     namespace internal
     {
-        class weak_string_handle;
+        enum class EntryType : uint8_t {
+            ATOM = 0,
+            SHORT_ATOM = 1,
+            CONCAT = 2
+        };
+
+#pragma pack(push, 1)
+        struct node
+        {
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+            size_t refCount;
+#endif
+            size_t hash;
+            EntryType type;
+        };
+
+        struct atom_node : node
+        {
+            size_t length : 56;
+        };
+
+        struct short_atom_node : node
+        {
+            unsigned char length;
+        };
+
+        struct concat_node : node
+        {
+            size_t length;
+            node* left;
+            node* right;
+        };
+#pragma pack(pop)
+
+        constexpr int MAX_SHORT_ATOM_STRING_LENGTH = 255;
+
+        [[nodiscard]] inline size_t min(const size_t x, const size_t y) {
+            return x <= y ? x : y;
+        }
+
+        [[nodiscard]] size_t get_length(const node* node);
+
+        [[nodiscard]] const char* get_string_from_leaf(const node* node);
+
+        [[nodiscard]] const char* node_type_to_string(EntryType type);
+
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+        [[nodiscard]] std::atomic_ref<size_t> get_refcount(node* node);
+#endif
+
+        class weak_string_handle
+        {
+            friend class stringpool::pool;
+            friend class stringpool::string_handle;
+            node* data;
+            stringpool::pool* owner;
+
+            weak_string_handle(node* data, pool* owner);
+
+            [[nodiscard]] stringpool::string_handle make_strong() const;
+
+            weak_string_handle() = default;
+        };
+
     }
+
 
     struct allocator
     {
@@ -31,17 +93,15 @@ namespace stringpool
         virtual void deallocate(char* ptr, size_t size) = 0;
     };
 
-    class pool;
-
     class string_handle
     {
         friend class pool;
         friend class internal::weak_string_handle;
-        node* data;
+
+        internal::node* data;
         pool* owner;
 
-        string_handle(node* data, pool* owner);
-
+        string_handle(internal::node* data, pool* owner);
 
         string_handle() = default;
 
@@ -49,14 +109,14 @@ namespace stringpool
         {
             // We assume this won't change during the lifetime of this object.
             // This is currently upheld by users of this class.
-            const node* root;
+            const internal::node* root;
 
-            std::deque<const node*> toVisit;
+            std::deque<const internal::node*> toVisit;
 
         public:
             tree_walker();
 
-            tree_walker(const node* root);
+            tree_walker(const internal::node* root);
 
             [[nodiscard]] size_t get_next_bytes(const char** bytes);
 
@@ -65,24 +125,24 @@ namespace stringpool
 
         class reverse_tree_walker
         {
-            const node* root;
-            std::deque<const node*> toVisit;
+            const internal::node* root;
+            std::deque<const internal::node*> toVisit;
 
         public:
             reverse_tree_walker();
 
-            reverse_tree_walker(const node* root);
+            reverse_tree_walker(const internal::node* root);
 
             [[nodiscard]] size_t get_next_bytes(const char** bytes);
 
             [[nodiscard]] bool operator==(const reverse_tree_walker&) const = default;
         };
 
-        [[nodiscard]] static bool concat_equals(const node* single, const node* left, const node* right);
+        [[nodiscard]] static bool concat_equals(const internal::node* single, const internal::node* left, const internal::node* right);
 
-        [[nodiscard]] static bool equals(const node* leftNode, const char* rightString, size_t length);
+        [[nodiscard]] static bool equals(const internal::node* leftNode, const char* rightString, size_t length);
 
-        [[nodiscard]] static int memcmp(const node* leftNode, const char* rhs, size_t length);
+        [[nodiscard]] static int memcmp(const internal::node* leftNode, const char* rhs, size_t length);
 
         class char_iterator_forward
         {
@@ -150,24 +210,24 @@ namespace stringpool
 
         void refcount_decrement();
 
-        static void refcount_inc(node* data);
+        static void refcount_inc(internal::node* data);
         void refcount_increment();
 
-        static void refcount_dec(node* data, pool& owner);
-        static void refcount_dec_unsafe(node* data, pool& owner);
+        static void refcount_dec(internal::node* data, pool& owner);
+        static void refcount_dec_unsafe(internal::node* data, pool& owner);
 
         // Returns true if reference count reached zero.
-        static bool refcount_dec_prefix(node* data);
+        static bool refcount_dec_prefix(internal::node* data);
 
-        static void actually_delete_unsafe(node* data, pool& owner, size_t hash);
+        static void actually_delete_unsafe(internal::node* data, pool& owner, size_t hash);
 
-        static void maybe_decrement_children_refcounts(node* data, pool& owner);
+        static void maybe_decrement_children_refcounts(internal::node* data, pool& owner);
 
-        static void visit_chunks(const node* node,
+        static void visit_chunks(const internal::node* node,
                                  void (*callback)(const char* piece, size_t pieceSize, void* state),
                                  void* state);
 
-        static size_t copy(const node* data, char* destination, size_t destination_size);
+        static size_t copy(const internal::node* data, char* destination, size_t destination_size);
 
     public:
         string_handle(string_handle& other);
@@ -309,62 +369,16 @@ namespace stringpool
         [[nodiscard]] char_iterator_backward rend() const;
     };
 
-    namespace internal
-    {
-        class weak_string_handle
-        {
-            friend class stringpool::pool;
-            friend class stringpool::string_handle;
-            node* data;
-            stringpool::pool* owner;
-
-            weak_string_handle(node* data, pool* owner);
-
-            [[nodiscard]] stringpool::string_handle make_strong() const;
-
-            weak_string_handle() = default;
-        };
-    }
-
-#pragma pack(push, 1)
-    // todo: move these to internal
-    struct node
-    {
-#ifdef STRINGPOOL_REFCOUNT_ENABLE
-        size_t refCount;
-#endif
-        size_t hash;
-        EntryType type;
-    };
-
-    struct atom_node : node
-    {
-        size_t length : 56;
-    };
-
-    struct short_atom_node : node
-    {
-        unsigned char length;
-    };
-
-    struct concat_node : node
-    {
-        size_t length;
-        node* left;
-        node* right;
-    };
-#pragma pack(pop)
-
     class pool
     {
         std::vector<char*> data;
         size_t totalDataSize = 0;
 
-        [[nodiscard]] atom_node* allocate_atom(size_t stringSize);
-        [[nodiscard]] short_atom_node* allocate_short_atom(size_t stringSize);
-        [[nodiscard]] concat_node* allocate_concat();
+        [[nodiscard]] internal::atom_node* allocate_atom(size_t stringSize);
+        [[nodiscard]] internal::short_atom_node* allocate_short_atom(size_t stringSize);
+        [[nodiscard]] internal::concat_node* allocate_concat();
 
-        void free_buffer(node* node);
+        void free_buffer(internal::node* node);
 
         friend class string_handle;
 
@@ -376,7 +390,7 @@ namespace stringpool
         std::unordered_map<size_t, std::list<internal::weak_string_handle>> table;
 
         // These functions are not thread-safe.
-        node* add_atom_unsafe(const char* string, size_t stringSize, size_t hash);
+        internal::node* add_atom_unsafe(const char* string, size_t stringSize, size_t hash);
 
         internal::weak_string_handle add_concat_unsafe(size_t hash, string_handle left, string_handle right);
 
