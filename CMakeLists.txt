@@ -4,7 +4,7 @@ include(cmake/asan.cmake)
 set(CMAKE_CXX_STANDARD 20)
 
 option(STRINGPOOL_REFCOUNT_ENABLE
-        "Whether stringpool should reference-count its contents. Disabling will make the cache grow-only and will boost performance."
+        "Whether stringpool should reference-count its contents. Disabling will make the cache grow-only and may slightly boost performance in debug builds, with even less of a boost in optimized builds."
         ON)
 
 add_library(stringpool STATIC
