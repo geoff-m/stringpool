@@ -8,8 +8,8 @@
 
 using namespace stringpool;
 
-string_handle::string_handle(internal::node* data, pool* owner)
-    : data(data), owner(owner)
+string_handle::string_handle(internal::node* data)
+    : data(data)
 {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
@@ -17,7 +17,7 @@ string_handle::string_handle(internal::node* data, pool* owner)
 }
 
 string_handle::string_handle(string_handle& other)
-    : data(other.data), owner(other.owner)
+    : data(other.data)
 {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
@@ -25,7 +25,7 @@ string_handle::string_handle(string_handle& other)
 }
 
 string_handle::string_handle(const string_handle& other)
-    : data(other.data), owner(other.owner)
+    : data(other.data)
 {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
@@ -33,7 +33,7 @@ string_handle::string_handle(const string_handle& other)
 }
 
 string_handle::string_handle(string_handle&& other) noexcept
-    : data(other.data), owner(other.owner)
+    : data(other.data)
 {
     other.data = nullptr;
     // move constructor; no refcount change
@@ -48,7 +48,6 @@ string_handle& string_handle::operator=(const string_handle& other) noexcept
     refcount_decrement();
 #endif
     data = other.data;
-    owner = other.owner;
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_increment();
 #endif
@@ -62,7 +61,6 @@ string_handle& string_handle::operator=(string_handle&& other) noexcept
     if (this == &other)
         return *this;
     data = other.data;
-    owner = other.owner;
     other.data = nullptr;
     return *this;
 }
@@ -121,14 +119,15 @@ void string_handle::actually_delete_unsafe(internal::node* data, pool& owner, si
     }
 }
 
-void string_handle::refcount_dec(internal::node* data, pool& owner)
+void string_handle::refcount_dec(internal::node* data)
 {
     const auto hash = data->hash;
+    const auto owner = data->owner;
     if (!refcount_dec_prefix(data))
         return;
 
-    std::unique_lock lock(owner.tableRwMutex);
-    actually_delete_unsafe(data, owner, hash);
+    std::unique_lock lock(owner->tableRwMutex);
+    actually_delete_unsafe(data, *owner, hash);
 }
 
 void string_handle::refcount_dec_unsafe(internal::node* data, pool& owner)
@@ -150,7 +149,7 @@ void string_handle::refcount_decrement()
 {
     if (data == nullptr)
         return;
-    refcount_dec(data, *owner);
+    refcount_dec(data);
 }
 #endif
 
