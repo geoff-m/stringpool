@@ -10,8 +10,13 @@
 #include <vector>
 #include <iterator>
 
+// todo: fix
+#include "../../src/include/pack_utils.h"
+
 namespace stringpool
 {
+    struct node;
+
     namespace internal
     {
         class weak_string_handle;
@@ -32,10 +37,10 @@ namespace stringpool
     {
         friend class pool;
         friend class internal::weak_string_handle;
-        const char* data;
+        node* data;
         pool* owner;
 
-        string_handle(const char* data, pool* owner);
+        string_handle(node* data, pool* owner);
 
 
         string_handle() = default;
@@ -44,14 +49,14 @@ namespace stringpool
         {
             // We assume this won't change during the lifetime of this object.
             // This is currently upheld by users of this class.
-            const char* root;
+            const node* root;
 
-            std::deque<const char*> toVisit;
+            std::deque<const node*> toVisit;
 
         public:
             tree_walker();
 
-            tree_walker(const char* root);
+            tree_walker(const node* root);
 
             [[nodiscard]] size_t get_next_bytes(const char** bytes);
 
@@ -60,24 +65,24 @@ namespace stringpool
 
         class reverse_tree_walker
         {
-            const char* root;
-            std::deque<const char*> toVisit;
+            const node* root;
+            std::deque<const node*> toVisit;
 
         public:
             reverse_tree_walker();
 
-            reverse_tree_walker(const char* root);
+            reverse_tree_walker(const node* root);
 
             [[nodiscard]] size_t get_next_bytes(const char** bytes);
 
             [[nodiscard]] bool operator==(const reverse_tree_walker&) const = default;
         };
 
-        [[nodiscard]] static bool concat_equals(const char* single, const char* left, const char* right);
+        [[nodiscard]] static bool concat_equals(const node* single, const node* left, const node* right);
 
-        [[nodiscard]] static bool equals(const char* leftNode, const char* rightString, size_t length);
+        [[nodiscard]] static bool equals(const node* leftNode, const char* rightString, size_t length);
 
-        [[nodiscard]] static int memcmp(const char* leftNode, const char* rhs, size_t length);
+        [[nodiscard]] static int memcmp(const node* leftNode, const char* rhs, size_t length);
 
         class char_iterator_forward
         {
@@ -145,24 +150,24 @@ namespace stringpool
 
         void refcount_decrement();
 
-        static void refcount_inc(char* data);
+        static void refcount_inc(node* data);
         void refcount_increment();
 
-        static void refcount_dec(char* data, pool& owner);
-        static void refcount_dec_unsafe(char* data, pool& owner);
+        static void refcount_dec(node* data, pool& owner);
+        static void refcount_dec_unsafe(node* data, pool& owner);
 
         // Returns true if reference count reached zero.
-        static bool refcount_dec_prefix(char* data);
+        static bool refcount_dec_prefix(node* data);
 
-        static void actually_delete_unsafe(char* data, pool& owner, size_t hash);
+        static void actually_delete_unsafe(node* data, pool& owner, size_t hash);
 
-        static void maybe_decrement_children_refcounts(char* data, pool& owner);
+        static void maybe_decrement_children_refcounts(node* data, pool& owner);
 
-        static void visit_chunks(const char* node,
+        static void visit_chunks(const node* node,
                                  void (*callback)(const char* piece, size_t pieceSize, void* state),
                                  void* state);
 
-        static size_t copy(const char* data, char* destination, size_t destination_size);
+        static size_t copy(const node* data, char* destination, size_t destination_size);
 
     public:
         string_handle(string_handle& other);
@@ -310,10 +315,10 @@ namespace stringpool
         {
             friend class stringpool::pool;
             friend class stringpool::string_handle;
-            const char* data;
+            node* data;
             stringpool::pool* owner;
 
-            weak_string_handle(const char* data, pool* owner);
+            weak_string_handle(node* data, pool* owner);
 
             [[nodiscard]] stringpool::string_handle make_strong() const;
 
@@ -321,14 +326,45 @@ namespace stringpool
         };
     }
 
+#pragma pack(push, 1)
+    // todo: move these to internal
+    struct node
+    {
+#ifdef STRINGPOOL_REFCOUNT_ENABLE
+        size_t refCount;
+#endif
+        size_t hash;
+        EntryType type;
+    };
+
+    struct atom_node : node
+    {
+        size_t length : 56;
+    };
+
+    struct short_atom_node : node
+    {
+        unsigned char length;
+    };
+
+    struct concat_node : node
+    {
+        size_t length;
+        node* left;
+        node* right;
+    };
+#pragma pack(pop)
+
     class pool
     {
         std::vector<char*> data;
         size_t totalDataSize = 0;
 
-        [[nodiscard]] char* add_buffer(size_t size);
+        [[nodiscard]] atom_node* allocate_atom(size_t stringSize);
+        [[nodiscard]] short_atom_node* allocate_short_atom(size_t stringSize);
+        [[nodiscard]] concat_node* allocate_concat();
 
-        void free_buffer(char* node);
+        void free_buffer(node* node);
 
         friend class string_handle;
 
@@ -340,7 +376,7 @@ namespace stringpool
         std::unordered_map<size_t, std::list<internal::weak_string_handle>> table;
 
         // These functions are not thread-safe.
-        char* add_atom_unsafe(const char* string, size_t stringSize, size_t hash);
+        node* add_atom_unsafe(const char* string, size_t stringSize, size_t hash);
 
         internal::weak_string_handle add_concat_unsafe(size_t hash, string_handle left, string_handle right);
 
@@ -467,8 +503,7 @@ bool operator!=(const stringpool::string_handle& lhs, const stringpool::string_h
 template <>
 struct std::hash<stringpool::string_handle>
 {
-    std::size_t operator()(stringpool::string_handle const& s) const noexcept
-    {
+    std::size_t operator()(stringpool::string_handle const& s) const noexcept {
         return s.hash();
     }
 };
