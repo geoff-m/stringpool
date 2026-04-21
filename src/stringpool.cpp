@@ -97,7 +97,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         if (!haveWriterLock)
             return InternResult::NeedWriterLock;
         node* atom = add_atom_unsafe(string, size, hash);
-        weak_string_handle ret(atom, this);
+        weak_string_handle ret(atom);
         existingEntries.push_back(ret);
         result = ret;
         ++internMisses;
@@ -108,7 +108,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         return InternResult::NeedWriterLock;
     node* atom = add_atom_unsafe(string, size, hash);
     auto r = table.emplace(hash, std::list<weak_string_handle>());
-    weak_string_handle ret(atom, this);
+    weak_string_handle ret(atom);
     r.first->second.push_back(ret);
     result = ret;
     ++internMisses;
@@ -143,35 +143,38 @@ string_handle pool::intern(std::string_view string)
     return intern(string.data(), string.size());
 }
 
-weak_string_handle::weak_string_handle(node* data, pool* owner)
-    : data(data), owner(owner)
+weak_string_handle::weak_string_handle(node* data)
+    : data(data)
 {
 }
 
 string_handle weak_string_handle::make_strong() const
 {
-    return string_handle(data, owner);
+    return string_handle(data);
 }
 
-atom_node* pool::allocate_atom(size_t stringSize) {
+atom_node* pool::allocate_atom(size_t stringSize, size_t hash, pool* owner) {
     const auto nodeSize = sizeof(atom_node) + stringSize;
     auto* ret = alloc->allocate(nodeSize);
+    new (ret) node(EntryType::ATOM, hash, owner);
     data.emplace_back(ret);
     totalDataSize += nodeSize;
     return reinterpret_cast<atom_node*>(ret);
 }
 
-short_atom_node* pool::allocate_short_atom(size_t stringSize) {
+short_atom_node* pool::allocate_short_atom(size_t stringSize, size_t hash, pool* owner) {
     const auto nodeSize = sizeof(short_atom_node) + stringSize;
     auto* ret = alloc->allocate(nodeSize);
+    new (ret) node(EntryType::SHORT_ATOM, hash, owner);
     data.emplace_back(ret);
     totalDataSize += nodeSize;
     return reinterpret_cast<short_atom_node*>(ret);
 }
 
-concat_node* pool::allocate_concat() {
+concat_node* pool::allocate_concat(size_t hash, pool* owner) {
     const auto nodeSize = sizeof(concat_node);
     auto* ret = alloc->allocate(nodeSize);
+    new (ret) node(EntryType::CONCAT, hash, owner);
     data.emplace_back(ret);
     totalDataSize += nodeSize;
     return reinterpret_cast<concat_node*>(ret);
@@ -189,15 +192,11 @@ node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
 {
     if (stringSize <= MAX_SHORT_ATOM_STRING_LENGTH)
     {
-        auto* shortAtom = allocate_short_atom(stringSize);
-        shortAtom->type = EntryType::SHORT_ATOM;
-        shortAtom->hash = hash;
-#ifdef STRINGPOOL_REFCOUNT_ENABLE
-        shortAtom->refCount = 0;
-#endif
+        auto* shortAtom = allocate_short_atom(stringSize, hash, this);
         shortAtom->length = static_cast<char>(stringSize);
         std::memcpy(reinterpret_cast<char*>(shortAtom) + sizeof(*shortAtom), string, stringSize);
         assert(internal::get_length(shortAtom) == stringSize);
+        assert(shortAtom->owner == this);
         return shortAtom;
     }
     else
@@ -205,12 +204,7 @@ node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
         if (stringSize != (stringSize & 0x00ffffffffffffff)) [[unlikely]] {
             std::abort(); // string is too large.
         }
-        auto* atom = allocate_atom(stringSize);
-        atom->type = EntryType::ATOM;
-        atom->hash = hash;
-#ifdef STRINGPOOL_REFCOUNT_ENABLE
-        atom->refCount = 0;
-#endif
+        auto* atom = allocate_atom(stringSize, hash, this);
         atom->length = stringSize;
         std::memcpy(reinterpret_cast<char*>(atom) + sizeof(atom_node), string, stringSize);
         assert(internal::get_length(atom) == stringSize);
@@ -231,18 +225,13 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
     if (totalLength <= MAX_SHORT_ATOM_STRING_LENGTH)
     {
         // We will store the concatenation as a single atom node.
-        short_atom_node* shortAtom = allocate_short_atom(totalLength);
-#ifdef STRINGPOOL_REFCOUNT_ENABLE
-        shortAtom->refCount = 0;
-#endif
-        shortAtom->type = EntryType::SHORT_ATOM;
-        shortAtom->hash = hash;
+        short_atom_node* shortAtom = allocate_short_atom(totalLength, hash, this);
         shortAtom->length =  static_cast<char>(totalLength);
         left.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node), leftLength);
         right.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node)+ leftLength, rightLength);
         assert(get_length(shortAtom) == totalLength);
         auto r = table.emplace(hash, std::list<weak_string_handle>());
-        weak_string_handle ret(shortAtom, this);
+        weak_string_handle ret(shortAtom);
         r.first->second.push_back(ret);
         return ret;
     }
@@ -251,12 +240,7 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
         // We will store the concatenation as a concat node.
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
-        concat_node* concat = allocate_concat();
-#ifdef STRINGPOOL_REFCOUNT_ENABLE
-        concat->refCount = 0;
-#endif
-        concat->type = EntryType::CONCAT;
-        concat->hash = hash;
+        concat_node* concat = allocate_concat(hash, this);
         concat->length = totalLength;
         concat->left = left.data;
         concat->right = right.data;
@@ -265,7 +249,7 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
         left.refcount_increment();
         right.refcount_increment();
 #endif
-        weak_string_handle ret(concat, this);
+        weak_string_handle ret(concat);
         r.first->second.push_back(ret);
         return ret;
     }
@@ -301,7 +285,7 @@ pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, strin
 
 string_handle pool::concat(string_handle left, string_handle right)
 {
-    if (left.owner != this || right.owner != this)
+    if (left.data->owner != this || right.data->owner != this)
         throw std::invalid_argument("Both strings for concatenation must belong to this pool instance");
     std::shared_lock readLock(tableRwMutex);
     hasher h;
@@ -333,4 +317,9 @@ bool operator==(const string_handle& lhs, const string_handle& rhs)
 bool operator!=(const string_handle& lhs, const string_handle& rhs)
 {
     return !(lhs == rhs);
+}
+
+node::node(EntryType type, size_t hash, pool* owner)
+    : hash(hash), owner(owner), type(type)
+{
 }

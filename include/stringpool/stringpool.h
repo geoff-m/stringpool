@@ -27,10 +27,12 @@ namespace stringpool
         struct node
         {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
-            size_t refCount;
+            size_t refCount = 0;
 #endif
             size_t hash;
+            pool* owner;
             EntryType type;
+            node(EntryType type, size_t hash, pool* owner);
         };
 
         struct atom_node : node
@@ -72,9 +74,8 @@ namespace stringpool
             friend class stringpool::pool;
             friend class stringpool::string_handle;
             node* data;
-            stringpool::pool* owner;
 
-            weak_string_handle(node* data, pool* owner);
+            weak_string_handle(node* data);
 
             [[nodiscard]] stringpool::string_handle make_strong() const;
 
@@ -82,7 +83,6 @@ namespace stringpool
         };
 
     }
-
 
     struct allocator
     {
@@ -99,9 +99,8 @@ namespace stringpool
         friend class internal::weak_string_handle;
 
         internal::node* data;
-        pool* owner;
 
-        string_handle(internal::node* data, pool* owner);
+        string_handle(internal::node* data);
 
         string_handle() = default;
 
@@ -213,7 +212,7 @@ namespace stringpool
         static void refcount_inc(internal::node* data);
         void refcount_increment();
 
-        static void refcount_dec(internal::node* data, pool& owner);
+        static void refcount_dec(internal::node* data);
         static void refcount_dec_unsafe(internal::node* data, pool& owner);
 
         // Returns true if reference count reached zero.
@@ -374,9 +373,9 @@ namespace stringpool
         std::vector<char*> data;
         size_t totalDataSize = 0;
 
-        [[nodiscard]] internal::atom_node* allocate_atom(size_t stringSize);
-        [[nodiscard]] internal::short_atom_node* allocate_short_atom(size_t stringSize);
-        [[nodiscard]] internal::concat_node* allocate_concat();
+        [[nodiscard]] internal::atom_node* allocate_atom(size_t stringSize, size_t hash, pool* owner);
+        [[nodiscard]] internal::short_atom_node* allocate_short_atom(size_t stringSize, size_t hash, pool* owner);
+        [[nodiscard]] internal::concat_node* allocate_concat(size_t hash, pool* owner);
 
         void free_buffer(internal::node* node);
 
