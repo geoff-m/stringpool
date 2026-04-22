@@ -105,6 +105,12 @@ and any other program that's likely to have identical strings
 sitting in memory, such as file names, URL elements,
 or identifiers parsed from text files.
 
+Although string interning's main goal of reducing memory usage
+typically comes at a modest time cost, it is not guaranteed that your application will be slowed down.
+In fact, some applications may be *sped up* if they make frequent equality comparisons between strings.
+Since a stringpool::pool deduplicates strings, equality comparisons on pairs of string handles
+reduce to simply comparing pointers, a fast constant-time operation.
+
 The inclusion of the `concat` function makes `stringpool` slightly more general,
 not merely because concatenation is a useful operation,
 but also because the pool deduplicates strings regardless of their concatenation structure.

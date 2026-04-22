@@ -340,8 +340,6 @@ bool string_handle::equals(const char* rhs) const {
 bool string_handle::equals(const string_handle& rhs) const {
     if (data == rhs.data)
         return true;
-    if (data == nullptr ^ rhs.data == nullptr)
-        return false;
     if (data->owner == rhs.data->owner)
         return false;
     tree_walker leftWalker(data);
