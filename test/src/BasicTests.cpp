@@ -85,6 +85,13 @@ TEST(Basic, ConcatDedupReadmeExample)
     EXPECT_TRUE(path1 == path5);
 }
 
+TEST(Basic, ConcatEmpty) {
+    pool p;
+    auto e1 = p.intern("");
+    auto e2 = p.concat(e1, e1);
+    expectEqual(e2, "");
+}
+
 TEST(Basic, Concat8Plus8) {
     pool p;
     auto ia = p.intern("aaaaaaaa");
