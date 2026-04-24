@@ -48,11 +48,11 @@ pool::pool(size_t initial_table_capacity, allocator* allocator)
 {
     switch (buffer->type)
     {
-    case EntryType::ATOM:
+    case NodeType::ATOM:
         return sizeof(atom_node) + get_length(buffer);
-    case EntryType::SHORT_ATOM:
+    case NodeType::SHORT_ATOM:
         return sizeof(short_atom_node) + get_length(buffer);
-    case EntryType::CONCAT:
+    case NodeType::CONCAT:
         return sizeof(concat_node);
     default:
         std::abort(); // unreachable.
@@ -156,8 +156,7 @@ string_handle weak_string_handle::make_strong() const
 atom_node* pool::allocate_atom(size_t stringSize, size_t hash, pool* owner) {
     const auto nodeSize = sizeof(atom_node) + stringSize;
     auto* ret = alloc->allocate(nodeSize);
-    new (ret) node(EntryType::ATOM, hash, owner);
-    data.emplace_back(ret);
+    new (ret) node(NodeType::ATOM, hash, owner);
     totalDataSize += nodeSize;
     return reinterpret_cast<atom_node*>(ret);
 }
@@ -165,8 +164,7 @@ atom_node* pool::allocate_atom(size_t stringSize, size_t hash, pool* owner) {
 short_atom_node* pool::allocate_short_atom(size_t stringSize, size_t hash, pool* owner) {
     const auto nodeSize = sizeof(short_atom_node) + stringSize;
     auto* ret = alloc->allocate(nodeSize);
-    new (ret) node(EntryType::SHORT_ATOM, hash, owner);
-    data.emplace_back(ret);
+    new (ret) node(NodeType::SHORT_ATOM, hash, owner);
     totalDataSize += nodeSize;
     return reinterpret_cast<short_atom_node*>(ret);
 }
@@ -174,8 +172,7 @@ short_atom_node* pool::allocate_short_atom(size_t stringSize, size_t hash, pool*
 concat_node* pool::allocate_concat(size_t hash, pool* owner) {
     const auto nodeSize = sizeof(concat_node);
     auto* ret = alloc->allocate(nodeSize);
-    new (ret) node(EntryType::CONCAT, hash, owner);
-    data.emplace_back(ret);
+    new (ret) node(NodeType::CONCAT, hash, owner);
     totalDataSize += nodeSize;
     return reinterpret_cast<concat_node*>(ret);
 }
@@ -319,7 +316,7 @@ bool operator!=(const string_handle& lhs, const string_handle& rhs)
     return !(lhs == rhs);
 }
 
-node::node(EntryType type, size_t hash, pool* owner)
+node::node(NodeType type, size_t hash, pool* owner)
     : hash(hash), owner(owner), type(type)
 {
 }

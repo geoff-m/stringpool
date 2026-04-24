@@ -23,7 +23,7 @@ Nevertheless, it has a rich set of accessors:
  - `copy(char* destination, size_t length)`
  - `to_string()` - create a `std::string` copy
  - `hash()` - get a non-cryptographic hash
- - `begin()`/`end()` - char iterators
+ - `begin()`/`end()` - forward char iterators
  - `rbegin()`/`rend()` - backward char iterators
  - `strcmp(const char* rhs)`
  - `strcmp(const string_handle& rhs)`

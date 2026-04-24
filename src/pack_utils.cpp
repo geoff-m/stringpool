@@ -8,17 +8,17 @@ namespace stringpool::internal
     {
         switch (node->type)
         {
-        case EntryType::SHORT_ATOM:
+        case NodeType::SHORT_ATOM:
             {
                 const auto len = reinterpret_cast<const short_atom_node*>(node)->length;
                 return len;
             }
-        case EntryType::ATOM:
+        case NodeType::ATOM:
             {
                 auto len = reinterpret_cast<const atom_node*>(node)->length;
                 return len;
             }
-        case EntryType::CONCAT:
+        case NodeType::CONCAT:
             {
                 auto len = reinterpret_cast<const concat_node*>(node)->length;
                 return len;
@@ -32,9 +32,9 @@ namespace stringpool::internal
     {
         switch (node->type)
         {
-        case EntryType::ATOM:
+        case NodeType::ATOM:
             return reinterpret_cast<const char*>(node) + sizeof(atom_node);
-        case EntryType::SHORT_ATOM:
+        case NodeType::SHORT_ATOM:
             return reinterpret_cast<const char*>(node) + sizeof(short_atom_node);
         default:
             std::abort(); // should be unreachable
@@ -48,15 +48,15 @@ namespace stringpool::internal
     }
 #endif
 
-    const char* node_type_to_string(EntryType type)
+    const char* node_type_to_string(NodeType type)
     {
         switch (type)
         {
-        case EntryType::ATOM:
+        case NodeType::ATOM:
             return "atom";
-        case EntryType::SHORT_ATOM:
+        case NodeType::SHORT_ATOM:
             return "short_atom";
-        case EntryType::CONCAT:
+        case NodeType::CONCAT:
             return "concat";
         default:
             return "unknown";

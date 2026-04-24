@@ -16,7 +16,7 @@ size_t string_handle::tree_walker::get_next_bytes(const char** bytes) {
         return 0;
     auto* current = toVisit.back();
     toVisit.pop_back();
-    while (current->type == internal::EntryType::CONCAT) {
+    while (current->type == internal::NodeType::CONCAT) {
         const auto* currentConcat = reinterpret_cast<const internal::concat_node*>(current);
         const auto rightChild = currentConcat->right;
         const auto leftChild =currentConcat->left;

@@ -69,7 +69,7 @@ void string_handle::refcount_increment() {
 }
 
 void string_handle::maybe_decrement_children_refcounts(internal::node* data, pool& owner) {
-    if (data->type == internal::EntryType::CONCAT) {
+    if (data->type == internal::NodeType::CONCAT) {
         const auto* concatData = reinterpret_cast<const internal::concat_node*>(data);
         auto* left = concatData->left;
         auto* right = concatData->right;

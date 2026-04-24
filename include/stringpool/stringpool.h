@@ -17,7 +17,7 @@ namespace stringpool
 
     namespace internal
     {
-        enum class EntryType : uint8_t {
+        enum class NodeType : uint8_t {
             ATOM = 0,
             SHORT_ATOM = 1,
             CONCAT = 2
@@ -31,8 +31,8 @@ namespace stringpool
 #endif
             size_t hash;
             pool* owner;
-            EntryType type;
-            node(EntryType type, size_t hash, pool* owner);
+            NodeType type;
+            node(NodeType type, size_t hash, pool* owner);
         };
 
         struct atom_node : node
@@ -63,7 +63,7 @@ namespace stringpool
 
         [[nodiscard]] const char* get_string_from_leaf(const node* node);
 
-        [[nodiscard]] const char* node_type_to_string(EntryType type);
+        [[nodiscard]] const char* node_type_to_string(NodeType type);
 
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
         [[nodiscard]] std::atomic_ref<size_t> get_refcount(node* node);
@@ -370,7 +370,6 @@ namespace stringpool
 
     class pool
     {
-        std::vector<char*> data;
         size_t totalDataSize = 0;
 
         [[nodiscard]] internal::atom_node* allocate_atom(size_t stringSize, size_t hash, pool* owner);
