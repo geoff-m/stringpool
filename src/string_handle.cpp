@@ -66,6 +66,7 @@ void string_handle::refcount_inc(internal::node* data) {
 
 void string_handle::refcount_increment() {
     refcount_inc(data);
+    maybe_increment_children_refcounts(data);
 }
 
 void string_handle::maybe_decrement_children_refcounts(internal::node* data, pool& owner) {
@@ -75,6 +76,16 @@ void string_handle::maybe_decrement_children_refcounts(internal::node* data, poo
         auto* right = concatData->right;
         refcount_dec_unsafe(left, owner);
         refcount_dec_unsafe(right, owner);
+    }
+}
+
+void string_handle::maybe_increment_children_refcounts(internal::node* data) {
+    if (data->type == internal::NodeType::CONCAT) {
+        const auto* concatData = reinterpret_cast<const internal::concat_node*>(data);
+        auto* left = concatData->left;
+        auto* right = concatData->right;
+        refcount_inc(left);
+        refcount_inc(right);
     }
 }
 
@@ -134,9 +145,14 @@ void string_handle::refcount_decrement() {
 #endif
 
 string_handle::~string_handle() {
+    // debug: check for UAF
+    if (data != nullptr)
+        const auto hash = data->hash;
+
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_decrement();
 #endif
+    data = nullptr;
 }
 
 size_t string_handle::copy(const internal::node* data, char* destination, size_t destination_size) {

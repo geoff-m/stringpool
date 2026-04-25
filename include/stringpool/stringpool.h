@@ -222,6 +222,8 @@ namespace stringpool
 
         static void maybe_decrement_children_refcounts(internal::node* data, pool& owner);
 
+        static void maybe_increment_children_refcounts(internal::node* data);
+
         static void visit_chunks(const internal::node* node,
                                  void (*callback)(const char* piece, size_t pieceSize, void* state),
                                  void* state);

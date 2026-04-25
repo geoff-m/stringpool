@@ -78,7 +78,7 @@ TEST(Race, InternLongConcat)
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
     pool pool(1000);
-    const auto threadCount = std::min(4u, std::thread::hardware_concurrency());
+    const auto threadCount = 2;// std::min(4u, std::thread::hardware_concurrency());
     const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
     for (int i = 0; i < threadCount; ++i)
         threads.emplace_back([&]
@@ -104,7 +104,9 @@ TEST(Race, InternLongConcat)
                 snprintf(rightBuf, bufferSize, atomFormat, rightInt);
                 auto leftIntern = pool.intern(leftBuf);
                 auto rightIntern = pool.intern(rightBuf);
-                pool.concat(leftIntern, rightIntern);
+                auto concat = pool.concat(leftIntern, rightIntern);
+                printf("Thread %ld: Done with %d..%d\n", pthread_self(), leftInt, rightInt);
+                fflush(stdout);
             }
         });
     for (int i = 0; i < threadCount; ++i)
