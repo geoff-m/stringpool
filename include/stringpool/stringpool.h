@@ -47,7 +47,7 @@ namespace stringpool
 
         struct concat_node : node
         {
-            size_t length;
+            size_t length : 56;
             node* left;
             node* right;
         };
@@ -414,10 +414,10 @@ namespace stringpool
             internal::weak_string_handle& result);
 
         // Statistics.
-        size_t totalInternRequestSize = 0;
-        size_t totalInternRequestCount = 0;
-        size_t internHits = 0;
-        size_t internMisses = 0;
+        std::atomic<size_t> totalInternRequestSize = 0;
+        std::atomic<size_t> totalInternRequestCount = 0;
+        std::atomic<size_t> internHits = 0;
+        std::atomic<size_t> internMisses = 0;
 
         allocator* alloc;
 

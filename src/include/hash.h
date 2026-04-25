@@ -18,6 +18,6 @@ namespace stringpool {
         void reset();
 
     private:
-        XXH3_state_t state;
+        XXH3_state_t state{};
     };
 }

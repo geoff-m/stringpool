@@ -185,6 +185,12 @@ void pool::free_buffer(node* node)
     totalDataSize -= size;
 }
 
+void abortIfStringTooLarge(size_t stringSize) {
+    if (stringSize != (stringSize & 0x00ffffffffffffff)) [[unlikely]] {
+        std::abort();
+    }
+}
+
 node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
 {
     if (stringSize <= MAX_SHORT_ATOM_STRING_LENGTH)
@@ -198,9 +204,7 @@ node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
     }
     else
     {
-        if (stringSize != (stringSize & 0x00ffffffffffffff)) [[unlikely]] {
-            std::abort(); // string is too large.
-        }
+        abortIfStringTooLarge(stringSize);
         auto* atom = allocate_atom(stringSize, hash, this);
         atom->length = stringSize;
         std::memcpy(reinterpret_cast<char*>(atom) + sizeof(atom_node), string, stringSize);
@@ -219,7 +223,7 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
     const auto leftLength = get_length(left.data);
     const auto rightLength = get_length(right.data);
     const auto totalLength = leftLength + rightLength;
-    if (totalLength <= MAX_SHORT_ATOM_STRING_LENGTH)
+    if (sizeof(short_atom_node) + totalLength <= sizeof(concat_node))
     {
         // We will store the concatenation as a single atom node.
         short_atom_node* shortAtom = allocate_short_atom(totalLength, hash, this);
@@ -237,6 +241,7 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
         // We will store the concatenation as a concat node.
         // We should never have both short in a concat,
         // since if we could, we'd just make it an atom instead of a concat.
+        abortIfStringTooLarge(totalLength);
         concat_node* concat = allocate_concat(hash, this);
         concat->length = totalLength;
         concat->left = left.data;
@@ -284,12 +289,12 @@ string_handle pool::concat(string_handle left, string_handle right)
 {
     if (left.data->owner != this || right.data->owner != this)
         throw std::invalid_argument("Both strings for concatenation must belong to this pool instance");
-    std::shared_lock readLock(tableRwMutex);
     hasher h;
     left.visit_chunks(addToHash, &h);
     right.visit_chunks(addToHash, &h);
     const auto hash = h.finish();
     weak_string_handle result{};
+    std::shared_lock readLock(tableRwMutex);
     auto readResult = do_concat_unsafe(hash, left, right, false, result);
     if (readResult == InternResult::NeedWriterLock)
     {
