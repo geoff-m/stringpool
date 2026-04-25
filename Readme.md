@@ -123,3 +123,6 @@ auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
 auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
 auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
 ```
+
+## Further reading
+Some implementation details are summarized [on my blog](https://geoff.space/2026/04/stringpool-internals/).
