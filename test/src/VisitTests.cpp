@@ -99,15 +99,11 @@ TEST(Visit, ConcatLeftShort) {
         pool p;
         std::string a = "a";
         std::string b(1024, 'b');
-        printf("Making ia\n");
         auto ia = p.intern(a.c_str());
-        printf("Making ib\n");
         auto ib = p.intern(b.c_str());
-        printf("Making iab\n");
         auto iab = p.concat(ia, ib);
         auto expected = a + b;
         testVisitEquals(expected, iab);
-        printf("Destroying everything\n");
     }
 }
 

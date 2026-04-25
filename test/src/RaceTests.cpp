@@ -105,8 +105,6 @@ TEST(Race, InternLongConcat)
                 auto leftIntern = pool.intern(leftBuf);
                 auto rightIntern = pool.intern(rightBuf);
                 auto concat = pool.concat(leftIntern, rightIntern);
-                printf("Thread %ld: Done with %d..%d\n", pthread_self(), leftInt, rightInt);
-                fflush(stdout);
             }
         });
     for (int i = 0; i < threadCount; ++i)
