@@ -120,7 +120,7 @@ void string_handle::refcount_dec(internal::node* data) {
     if (!refcount_dec_prefix(data))
         return;
 
-    std::unique_lock lock(owner->tableRwMutex);
+    std::lock_guard lock(owner->tableRwMutex);
     actually_delete_unsafe(data, *owner, hash);
 }
 

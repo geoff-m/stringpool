@@ -61,7 +61,7 @@ pool::pool(size_t initial_table_capacity, allocator* allocator)
 
 pool::~pool()
 {
-    std::unique_lock lock(tableRwMutex);
+    std::lock_guard lock(tableRwMutex);
     for (auto kvp : table)
     {
         auto& list = kvp.second;
@@ -126,7 +126,7 @@ string_handle pool::intern(const char* string, size_t size)
     if (resultWithRead == InternResult::NeedWriterLock)
     {
         readLock.unlock();
-        std::unique_lock writeLock(tableRwMutex);
+        std::lock_guard writeLock(tableRwMutex);
         auto resultWithWrite = do_intern_unsafe(hash, string, size, true, result);
         assert(resultWithWrite == InternResult::Success);
         return result.make_strong();
@@ -299,7 +299,7 @@ string_handle pool::concat(string_handle left, string_handle right)
     if (readResult == InternResult::NeedWriterLock)
     {
         readLock.unlock();
-        std::unique_lock writeLock(tableRwMutex);
+        std::lock_guard writeLock(tableRwMutex);
         auto writeResult = do_concat_unsafe(hash, left, right, true, result);
         assert(writeResult == InternResult::Success);
         return result.make_strong();
