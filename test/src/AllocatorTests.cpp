@@ -6,31 +6,38 @@
 
 using namespace stringpool;
 
-class Allocator : public stringpool::allocator
-{
+class Allocator : public stringpool::allocator {
 public:
-    char* allocate(size_t size) override
-    {
+    char* allocate(size_t size) override {
         auto* ret = std::malloc(size);
         printf("Thread %#lx Allocated %ld at %p\n", pthread_self(), size, ret);
         totalAllocated += size;
         return static_cast<char*>(ret);
     }
 
-    void deallocate(char* ptr, size_t size) override
-    {
+    char* allocate(size_t size, size_t alignment) override {
+        // std::aligned_alloc requires size to be a multiple of alignment.
+        // Therefore we round it up here.
+        const auto alignmentMask = alignment - 1;
+        assert((alignment & alignmentMask) == 0); // Alignment must be a power of 2.
+        const size_t alignedSize = (size + alignmentMask) & -alignment;
+        auto* ret = std::aligned_alloc(alignment, alignedSize);
+        printf("Thread %#lx Allocated %ld at %p\n", pthread_self(), size, ret);
+        totalAllocated += size;
+        return static_cast<char*>(ret);
+    }
+
+    void deallocate(char* ptr, size_t size) override {
         std::free(ptr);
         printf("Freed %ld at %p\n", size, ptr);
         totalFreed += size;
     }
 
-    [[nodiscard]] size_t total_allocated() const
-    {
+    [[nodiscard]] size_t total_allocated() const {
         return totalAllocated.load(std::memory_order::acquire);
     }
 
-    [[nodiscard]] size_t total_freed() const
-    {
+    [[nodiscard]] size_t total_freed() const {
         return totalFreed.load(std::memory_order::acquire);
     }
 
@@ -39,8 +46,7 @@ private:
     std::atomic<size_t> totalFreed = 0;
 };
 
-TEST(Allocator, ShortAtom)
-{
+TEST(Allocator, ShortAtom) {
     Allocator a;
     const auto string = "hello";
     size_t memoryUsed;
@@ -54,8 +60,7 @@ TEST(Allocator, ShortAtom)
     EXPECT_GT(a.total_freed(), strlen(string));
 }
 
-TEST(Allocator, LongAtom)
-{
+TEST(Allocator, LongAtom) {
     Allocator a;
     const auto length = 1234;
     auto string = std::make_unique<char[]>(length);
@@ -72,8 +77,7 @@ TEST(Allocator, LongAtom)
     EXPECT_GT(a.total_freed(), length);
 }
 
-TEST(Allocator, Concat)
-{
+TEST(Allocator, Concat) {
     Allocator a;
     const auto length = 1234;
     auto a1 = std::make_unique<char[]>(length);

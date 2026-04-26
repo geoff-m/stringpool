@@ -3,7 +3,6 @@
 #include <cstddef>
 #include <deque>
 #include <list>
-#include <mutex>
 #include <shared_mutex>
 #include <string>
 #include <unordered_map>
@@ -88,7 +87,11 @@ namespace stringpool
     {
         virtual ~allocator() = default;
 
-        virtual char* allocate(size_t size) = 0;
+        virtual char* allocate(size_t size) {
+            return allocate(size, 1);
+        }
+
+        virtual char* allocate(size_t size, size_t alignment) = 0;
 
         virtual void deallocate(char* ptr, size_t size) = 0;
     };

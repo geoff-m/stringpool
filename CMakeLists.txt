@@ -18,7 +18,9 @@ add_library(stringpool STATIC
         src/char_iterator.cpp
         src/reverse_char_iterator.cpp
         src/tree_walker.cpp
-        src/reverse_tree_walker.cpp)
+        src/reverse_tree_walker.cpp
+        src/default_allocator.cpp
+        src/include/default_allocator.h)
 
 if (STRINGPOOL_REFCOUNT_ENABLE)
     target_compile_definitions(stringpool PUBLIC STRINGPOOL_REFCOUNT_ENABLE=1)

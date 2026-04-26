@@ -1,25 +1,12 @@
 #include "stringpool/stringpool.h"
 #include "include/hash.h"
+#include "include/default_allocator.h"
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
 
 using namespace stringpool;
 using namespace stringpool::internal;
-
-class default_allocator : public allocator
-{
-public:
-    char* allocate(size_t size) override
-    {
-        return static_cast<char*>(std::malloc(size));
-    }
-
-    void deallocate(char* ptr, size_t size) override
-    {
-        return std::free(ptr);
-    }
-};
 
 default_allocator default_allocator;
 
@@ -155,7 +142,7 @@ string_handle weak_string_handle::make_strong() const
 
 atom_node* pool::allocate_atom(size_t stringSize, size_t hash, pool* owner) {
     const auto nodeSize = sizeof(atom_node) + stringSize;
-    auto* ret = alloc->allocate(nodeSize);
+    auto* ret = alloc->allocate(nodeSize, alignof(size_t));
     new (ret) node(NodeType::ATOM, hash, owner);
     totalDataSize += nodeSize;
     return reinterpret_cast<atom_node*>(ret);
@@ -163,7 +150,7 @@ atom_node* pool::allocate_atom(size_t stringSize, size_t hash, pool* owner) {
 
 short_atom_node* pool::allocate_short_atom(size_t stringSize, size_t hash, pool* owner) {
     const auto nodeSize = sizeof(short_atom_node) + stringSize;
-    auto* ret = alloc->allocate(nodeSize);
+    auto* ret = alloc->allocate(nodeSize, alignof(size_t));
     new (ret) node(NodeType::SHORT_ATOM, hash, owner);
     totalDataSize += nodeSize;
     return reinterpret_cast<short_atom_node*>(ret);
@@ -171,12 +158,11 @@ short_atom_node* pool::allocate_short_atom(size_t stringSize, size_t hash, pool*
 
 concat_node* pool::allocate_concat(size_t hash, pool* owner) {
     const auto nodeSize = sizeof(concat_node);
-    auto* ret = alloc->allocate(nodeSize);
+    auto* ret = alloc->allocate(nodeSize, alignof(size_t));
     new (ret) node(NodeType::CONCAT, hash, owner);
     totalDataSize += nodeSize;
     return reinterpret_cast<concat_node*>(ret);
 }
-
 
 void pool::free_buffer(node* node)
 {
