@@ -469,3 +469,13 @@ size_t string_handle::size() const {
 size_t string_handle::length() const {
     return size();
 }
+
+bool operator==(const string_handle& lhs, const string_handle& rhs)
+{
+    return lhs.equals(rhs);
+}
+
+bool operator!=(const string_handle& lhs, const string_handle& rhs)
+{
+    return !(lhs == rhs);
+}

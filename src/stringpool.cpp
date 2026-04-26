@@ -297,16 +297,6 @@ string_handle pool::concat(string_handle left, string_handle right)
     }
 }
 
-bool operator==(const string_handle& lhs, const string_handle& rhs)
-{
-    return lhs.equals(rhs);
-}
-
-bool operator!=(const string_handle& lhs, const string_handle& rhs)
-{
-    return !(lhs == rhs);
-}
-
 node::node(NodeType type, size_t hash, pool* owner)
     : hash(hash), owner(owner), type(type)
 {
