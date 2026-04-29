@@ -4,7 +4,11 @@ include(cmake/asan.cmake)
 set(CMAKE_CXX_STANDARD 20)
 
 option(STRINGPOOL_REFCOUNT_ENABLE
-        "Whether stringpool should reference-count its contents. Disabling will make the cache grow-only and may slightly boost performance in debug builds, with even less of a boost in optimized builds."
+        "Whether stringpool should reference-count its contents. Disabling will make the cache grow-only."
+        ON)
+
+option(STRINGPOOL_TEST_ENABLE
+        "Whether stringpool should build tests."
         ON)
 
 add_library(stringpool STATIC
@@ -33,6 +37,15 @@ find_package(xxHash CONFIG REQUIRED)
 target_link_libraries(stringpool
         PRIVATE xxHash::xxhash)
 
-enable_testing()
-find_package(GTest CONFIG REQUIRED)
-add_subdirectory(test)
+if (STRINGPOOL_TEST_ENABLE)
+    enable_testing()
+    find_package(GTest CONFIG REQUIRED)
+    add_subdirectory(test)
+endif()
+
+include(GNUInstallDirs)
+set_target_properties(stringpool PROPERTIES PUBLIC_HEADER include/stringpool/stringpool.h)
+install(TARGETS stringpool
+        ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/stringpool
+)
