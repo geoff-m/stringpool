@@ -17,7 +17,9 @@ add_executable(test-stringpool
         src/ReverseCharIteratorTests.cpp
         src/AllocatorTests.cpp
         src/MoveTests.cpp
-        src/AssignTests.cpp)
+        src/AssignTests.cpp
+        src/TestFormat.cpp
+        src/ChunkIteratorTests.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 
