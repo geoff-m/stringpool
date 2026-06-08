@@ -20,7 +20,8 @@ add_executable(test-stringpool
         src/AssignTests.cpp
         src/TestFormat.cpp
         src/ChunkIteratorTests.cpp
-        src/ReverseChunkIteratorTests.cpp)
+        src/ReverseChunkIteratorTests.cpp
+        src/ReadmeTests.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 
