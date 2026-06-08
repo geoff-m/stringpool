@@ -35,9 +35,31 @@ Nevertheless, it has a rich set of accessors:
  - `equals(const string_handle& rhs)`
  - `visit_chunks(void (*callback)(const char* chunk, size_t chunk_size, void* state), void* state)`
  - `visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state)`
+ - `begin_chunk()`/`end_chunk()` - chunkwise forward iterator
+ - `rbegin_chunk()`/`rend_chunk()` - chunkwise backward iterator
+
+### Concatenation
+In addition to `intern`, there is also `concat`,
+a function which takes two `string_handle` arguments
+and returns a `string_handle` representing the concatenation of the two.
+`concat` uses only O(1) memory.
+Both `string_handle` arguments to `concat` must belong to the same pool.
+
+In addition to being a useful operation per se,
+the `concat` opeartion also makes `intern` more general.
+This is because the pool deduplicates strings regardless of their concatenation structure.
+For example, each of the following lines will produce a `string_handle`
+identical to all the other lines:
+```c++
+auto path1 = p.intern("/foo/bar/baz");
+auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
+auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
+auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
+auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
+```
 
 ### Efficiently accessing interned strings with `visit_chunks`
-Although iterator functions are provided
+Although char iterator functions are provided
 for convenience, these access the string only a char at a time
 and should be avoided whenever speed is a concern.
 Meanwhile, `copy` and `to_string` can be used to copy the interned string
@@ -60,6 +82,11 @@ In the worst case, each of these chunks will be of size 1,
 which makes `visit_chunks` no better than the char iterator approach.
 But the opposite is more likely, i.e. that you will get a small number of chunks,
 including the ideal case of just a single chunk containing the entire string.
+
+As an alternative to `visit_chunks`, you can use the iterators provided by
+`begin_chunk` and `rbegin_chunk` to achieve the same effect.
+Note that while `rbegin_chunk` presents the chunks in reverse order,
+the char content within each chunk is not reversed.
 
 #### Example using `write`
 Consider the following example, in which we want to write an interned string to a file using POSIX `write`.
@@ -85,44 +112,58 @@ void efficient_write(int file, const string_handle& sh) {
 `write(file, sh.to_string().c_str(), sh.size())` would also work
 but would make a copy of the string, thereby defeating the purpose of interning.
 
-### Concatenation
-In addition to `intern`, there is also `concat`,
-a function which takes two `string_handle` arguments
-and returns a `string_handle` representing the concatenation of the two.
-`concat` uses only O(1) memory.
-Both `string_handle` arguments to `concat` must belong to the same `pool`. 
+Finally, the efficient version can also be written using `begin_chunk()`:
+```c++
+void efficient_write(int file, const string_handle& sh) {
+    for (auto it = sh.begin_chunk(); it != sh.end_chunk(); ++it) {
+        const auto chunk = *it;
+        write(file, chunk.data(), chunk.size());
+    }
+}
+```
 
 ## Use cases
+### Application types
 Consider string interning when your application handles
 a large number of strings (or a small number of large strings)
-among which most strings are not unique.
+among which many strings are not unique.
 This includes software like
  - HTTP servers
  - compilers
  - file transfer and archiving tools
 
 and any other program that's likely to have identical strings
-sitting in memory, such as file names, URL elements,
+sitting in memory, such as directory names, URL elements,
 or identifiers parsed from text files.
 
-Although string interning's main goal of reducing memory usage
-typically comes at a modest time cost, it is not guaranteed that your application will be slowed down.
+### Performance considerations
+The motivation for string interning is to trade time for space.
+You gain significant memory savings, provided you have large and/or numerous duplicated strings.
+You pay the time needed to maintain the pool.
+The time cost of using the pool is linear in the length of your strings.
+This makes it easy to justify adding string interning to a system,
+because the system almost certainly already pays a linear time cost (or more) to do whatever it does with strings.
+
+Although it may be wise to expect adopting string interning
+to slow down your application, it is not guaranteed.
 In fact, some applications may be *sped up* if they make frequent equality comparisons between strings.
 Since a stringpool::pool deduplicates strings, equality comparisons on pairs of string handles
 reduce to simply comparing pointers, a fast constant-time operation.
 
-The inclusion of the `concat` function makes `stringpool` slightly more general,
-not merely because concatenation is a useful operation,
-but also because the pool deduplicates strings regardless of their concatenation structure.
-For example, each of the following lines will produce a `string_handle`
-identical to all the other lines:
-```c++
-auto path1 = p.intern("/foo/bar/baz");
-auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
-auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
-auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
-auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
-```
+Another potential speed improvement comes from the fact that the string pool
+can help your application avoid allocating memory.
+Your allocator (up to and including the operating system) will have less work to do
+the less memory pressure there is.
+
+This library aims to be efficiently thread-safe.
+Most operations run efficiently in parallel,
+but making all threads share a mutable pool inevitably requires synchronization.
+Adding/removing strings to/from a pool are the most likely to
+cause contention, whereas operations using existing string handles
+(such as copying or comparing) should scale well with thread count.
+
+
+This library is not NUMA-aware.
 
 ## Further reading
 Some implementation details are summarized [on my blog](https://geoff.space/2026/04/stringpool-internals/).
