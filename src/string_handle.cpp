@@ -469,6 +469,14 @@ string_handle::chunk_iterator_forward string_handle::end_chunk() const {
     return {};
 }
 
+string_handle::chunk_iterator_backward string_handle::rbegin_chunk() const {
+    return chunk_iterator_backward(*this);
+}
+
+string_handle::chunk_iterator_backward string_handle::rend_chunk() const {
+    return {};
+}
+
 size_t string_handle::size() const {
     auto ret = get_length(data);
     return ret;
