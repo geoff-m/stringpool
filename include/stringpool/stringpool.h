@@ -231,7 +231,36 @@ namespace stringpool {
 
         static_assert(std::forward_iterator<chunk_iterator_forward>);
 
-        // todo: chunk_iterator_backward
+        class chunk_iterator_backward {
+        public:
+            using value_type = std::string_view;
+            using difference_type = std::ptrdiff_t;
+
+            chunk_iterator_backward();
+
+            explicit chunk_iterator_backward(const string_handle& sh);
+
+            chunk_iterator_backward(const chunk_iterator_backward&) = default;
+
+            chunk_iterator_backward& operator=(const chunk_iterator_backward&) = default;
+
+            [[nodiscard]] value_type operator*() const;
+
+            chunk_iterator_backward& operator++();
+
+            chunk_iterator_backward operator++(int);
+
+            [[nodiscard]] bool operator==(const chunk_iterator_backward& other) const;
+
+            [[nodiscard]] bool operator!=(const chunk_iterator_backward& other) const;
+
+        private:
+            reverse_tree_walker walker;
+            const char* chunkData;
+            size_t chunkSize;
+        };
+
+        static_assert(std::forward_iterator<chunk_iterator_backward>);
 
         void refcount_decrement();
 
@@ -400,6 +429,10 @@ namespace stringpool {
         [[nodiscard]] chunk_iterator_forward begin_chunk() const;
 
         [[nodiscard]] chunk_iterator_forward end_chunk() const;
+
+        [[nodiscard]] chunk_iterator_backward rbegin_chunk() const;
+
+        [[nodiscard]] chunk_iterator_backward rend_chunk() const;
     };
 
     class pool {

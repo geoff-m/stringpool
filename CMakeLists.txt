@@ -25,7 +25,8 @@ add_library(stringpool STATIC
         src/reverse_tree_walker.cpp
         src/default_allocator.cpp
         src/include/default_allocator.h
-        src/chunk_iterator.cpp)
+        src/chunk_iterator_forward.cpp
+        src/chunk_iterator_backward.cpp)
 
 if (STRINGPOOL_REFCOUNT_ENABLE)
     target_compile_definitions(stringpool PUBLIC STRINGPOOL_REFCOUNT_ENABLE=1)
