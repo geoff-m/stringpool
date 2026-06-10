@@ -38,6 +38,8 @@ Nevertheless, it has a rich set of accessors:
  - `begin_chunk()`/`end_chunk()` - chunkwise forward iterator
  - `rbegin_chunk()`/`rend_chunk()` - chunkwise backward iterator
 
+Specializations of `std::hash` and of `std::formatter` are also defined.
+
 ### Concatenation
 In addition to `intern`, there is also `concat`,
 a function which takes two `string_handle` arguments
@@ -58,7 +60,7 @@ auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/ba
 auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
 ```
 
-### Efficiently accessing interned strings with `visit_chunks`
+### Efficiently accessing interned strings
 Although char iterator functions are provided
 for convenience, these access the string only a char at a time
 and should be avoided whenever speed is a concern.
@@ -66,9 +68,16 @@ Meanwhile, `copy` and `to_string` can be used to copy the interned string
 to a user-provided location from where it can be efficiently accessed,
 but creating such a copy incurs a space and time cost.
 
-Therefore, we offer `visit_chunks`, an API that
-combines the speed advantage of processing the string in many-byte chunks
+Therefore, we offer `visit_chunks` and chunk iterators, APIs that
+combine the speed advantage of processing the string in many-byte chunks
 with the ability to avoid making a copy.
+
+In the worst case, each of these chunks will be of size 1,
+which makes these APIs no better than the char iterator approach.
+But the opposite is more likely, i.e. that you will get a small number of chunks,
+including the ideal case of just a single chunk containing the entire string.
+
+#### visit_chunks
 `visit_chunks` takes a `callback` and a `state` parameter.
 It calls the callback possibly repeatedly,
 each time passing to the callback a part of the string
@@ -78,11 +87,7 @@ and is not used by `visit_chunks` for any other purpose.
 The sequence of chunks presented to the callback
 represents a sequential partitioning of the string.
 
-In the worst case, each of these chunks will be of size 1,
-which makes `visit_chunks` no better than the char iterator approach.
-But the opposite is more likely, i.e. that you will get a small number of chunks,
-including the ideal case of just a single chunk containing the entire string.
-
+#### Chunk iterators
 As an alternative to `visit_chunks`, you can use the iterators provided by
 `begin_chunk` and `rbegin_chunk` to achieve the same effect.
 Note that while `rbegin_chunk` presents the chunks in reverse order,
@@ -158,9 +163,9 @@ the less memory pressure there is.
 This library aims to be efficiently thread-safe.
 Most operations run efficiently in parallel,
 but making all threads share a mutable pool inevitably requires synchronization.
-Adding/removing strings to/from a pool are the most likely to
-cause contention, whereas operations using existing string handles
-(such as copying or comparing) should scale well with thread count.
+Adding/deleting strings to/from a pool are the most likely to
+cause contention, whereas applications that mostly operate on existing string handles
+should scale well with thread count.
 
 
 This library is not NUMA-aware.
