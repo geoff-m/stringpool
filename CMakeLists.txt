@@ -1,6 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
 project(stringpool)
-include(cmake/asan.cmake)
 set(CMAKE_CXX_STANDARD 20)
 
 option(STRINGPOOL_REFCOUNT_ENABLE
@@ -10,6 +9,10 @@ option(STRINGPOOL_REFCOUNT_ENABLE
 option(STRINGPOOL_TEST_ENABLE
         "Whether stringpool should build tests."
         ON)
+
+option(STRINGPOOL_ASAN_ENABLE
+        "Whether stringpool should build with Address Sanitizer"
+        OFF)
 
 add_library(stringpool STATIC
         src/stringpool.cpp
@@ -30,6 +33,11 @@ add_library(stringpool STATIC
 
 if (STRINGPOOL_REFCOUNT_ENABLE)
     target_compile_definitions(stringpool PUBLIC STRINGPOOL_REFCOUNT_ENABLE=1)
+endif()
+
+if(STRINGPOOL_ENABLE_ASAN)
+    target_compile_options(stringpool PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(stringpool PRIVATE -fsanitize=address)
 endif()
 
 target_include_directories(stringpool PUBLIC include)
