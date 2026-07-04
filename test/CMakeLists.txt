@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 
 add_executable(test-stringpool
-    src/BasicTests.cpp
+        src/BasicTests.cpp
         src/StrcmpTests.cpp
         src/MemcmpTests.cpp
         src/HashTests.cpp
@@ -10,7 +10,7 @@ add_executable(test-stringpool
         src/GrowTableTests.cpp
         src/RaceTests.cpp
         src/CrossPool.cpp
-        src/TestStatistics.cpp
+        src/StatisticsTests.cpp
         src/VisitTests.cpp
         src/ToStringTests.cpp
         src/CharIteratorTests.cpp
@@ -18,7 +18,7 @@ add_executable(test-stringpool
         src/AllocatorTests.cpp
         src/MoveTests.cpp
         src/AssignTests.cpp
-        src/TestFormat.cpp
+        src/FormatTests.cpp
         src/ChunkIteratorTests.cpp
         src/ReverseChunkIteratorTests.cpp
         src/ReadmeTests.cpp)
@@ -26,8 +26,8 @@ add_executable(test-stringpool
 target_include_directories(test-stringpool PRIVATE src/include)
 
 target_link_libraries(test-stringpool
-    PRIVATE GTest::gtest_main
-    PRIVATE stringpool)
+        PRIVATE GTest::gtest_main
+        PRIVATE stringpool)
 
 include(GoogleTest)
 gtest_discover_tests(test-stringpool)

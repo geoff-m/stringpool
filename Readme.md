@@ -11,7 +11,7 @@ Once added to the pool, strings live there until their reference count drops to 
 If you disable reference counting (pass `-DSTRINGPOOL_REFCOUNT_ENABLE=OFF` to CMake),
 strings will instead persist until the pool is destroyed.
 
-You can then store these handles in place of your normal strings.
+You can then store and use these handles in place of your normal strings.
 In this way, you can achieve deduplication by sacrificing a bit of convenience.
 
 ### string_handle
