@@ -45,6 +45,9 @@ PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
     $<INSTALL_INTERFACE:include/>
 )
 
+# This propagates C++ standard 20 (at least) to targets that link to this.
+target_compile_features(stringpool INTERFACE cxx_std_20)
+
 find_package(xxHash CONFIG REQUIRED)
 
 target_link_libraries(stringpool
