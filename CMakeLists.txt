@@ -40,7 +40,13 @@ if(STRINGPOOL_ENABLE_ASAN)
     target_link_options(stringpool PRIVATE -fsanitize=address)
 endif()
 
-target_include_directories(stringpool PUBLIC include)
+target_include_directories(stringpool
+PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>  
+    $<INSTALL_INTERFACE:include/>
+)
+
+# This propagates C++ standard 20 (at least) to targets that link to this.
+target_compile_features(stringpool INTERFACE cxx_std_20)
 
 find_package(xxHash CONFIG REQUIRED)
 
@@ -56,6 +62,20 @@ endif()
 include(GNUInstallDirs)
 set_target_properties(stringpool PROPERTIES PUBLIC_HEADER include/stringpool/stringpool.h)
 install(TARGETS stringpool
+        EXPORT stringpool-export
+        LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
         ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/stringpool
+        RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+        INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+        PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+
+install(EXPORT stringpool-export
+        FILE stringpool-export.cmake
+        NAMESPACE stringpool::
+        DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/stringpool
+)
+
+install(FILES cmake/stringpoolConfig.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/stringpool
 )
