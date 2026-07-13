@@ -2,7 +2,9 @@
 A string interning library with concatenation.
 
 ## Overview
-The stringpool offers just one main function, `intern`,
+This library consists of two types: `stringpool` and `string_handle`.
+
+Instances of `stringpool` offer just one main function, `intern`,
 whose usage is simple.
 `intern` takes a string argument and returns a `string_handle`
 representing a cached version of the given string,
@@ -11,7 +13,7 @@ Once added to the pool, strings live there until their reference count drops to 
 If you disable reference counting (pass `-DSTRINGPOOL_REFCOUNT_ENABLE=OFF` to CMake),
 strings will instead persist until the pool is destroyed.
 
-You can then store and use these handles in place of your normal strings.
+You can then store and these instances of `string_handle` in place of your normal strings.
 In this way, you can achieve deduplication by sacrificing a bit of convenience.
 
 ## Requirements
@@ -22,7 +24,6 @@ Depends on:
 
 stringpool can use vcpkg to acquire its dependencies automatically.
 See [INSTALL.md](INSTALL.md).
-
 
 ## Usage
 ### string_handle
@@ -126,7 +127,7 @@ void efficient_write(int file, const string_handle& sh) {
 }
 ```
 `write(file, sh.to_string().c_str(), sh.size())` would also work
-but would make a copy of the string, thereby defeating the purpose of interning.
+but would make a copy of the string, requiring additional time and space proportional to the string length.
 
 Finally, the efficient version can also be written using `begin_chunk()`:
 ```c++
@@ -137,6 +138,42 @@ void efficient_write(int file, const string_handle& sh) {
     }
 }
 ```
+
+### Memory management
+#### Custom allocators
+You can supply your own memory allocation functions to stringpool.
+Inherit `stringpool::allocator` (whose declaration is shown below) and pass a pointer to an instance of this type to a `pool` constructor.
+```c++
+struct allocator {
+    virtual ~allocator() = default;
+    virtual char* allocate(size_t size) {
+        return allocate(size, 1);
+    }
+    virtual char* allocate(size_t size, size_t alignment) = 0;
+    virtual void deallocate(char* ptr, size_t size) = 0;
+};
+```
+stringpool will use the custom allocator for all interned string content.
+However, even when a custom allocator is supplied, stringpool will still use the default allocator for some bookkeeping.
+
+#### Statistics
+`pool` provides some statistics functions that can be used to get a notion of how much the pool is costing and saving you.
+The declarations of these functions are reproduced below, but see the header comments for their documentation.
+```c++
+size_t get_total_intern_request_size() const;
+size_t get_total_intern_request_count() const;
+size_t get_total_intern_request_hits() const;
+size_t get_total_intern_request_misses() const;
+size_t get_data_size() const;
+```
+For example, given a pool `p`, you could say that the quotient given by
+`p.get_data_size() / (double)p.get_total_intern_request_size()`
+is the "compression ratio" realized in `p`, with lower values meaning more space savings.
+
+Adding a string to a pool will allocate a O(1) number of extra bytes in addition to the size of the string.
+Beyond this, a small amount of additional bookkeeping data,
+linear in the number of interned strings,
+is also allocated on the default heap but not measured by the above statistics functions.
 
 ## Use cases
 ### Application types

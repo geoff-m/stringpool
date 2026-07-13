@@ -47,10 +47,14 @@ If you force the language version to less than 20, expect the build to fail.
 Sample usage:
 ```c++
 #include <stringpool.h>
+#include <format>
+#include <iostream>
 
 int main() {
     stringpool::pool p;
-    
+    const auto greeting = p.intern("Hello");
+    std::cout << std::format("{}, World!\n", greeting);
+	    
     return 0;
 }
 ```
