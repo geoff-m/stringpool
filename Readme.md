@@ -1,8 +1,8 @@
 # stringpool
 A string interning library with concatenation.
 
-## Usage
-The string pool offers just one main function, `intern`,
+## Overview
+The stringpool offers just one main function, `intern`,
 whose usage is simple.
 `intern` takes a string argument and returns a `string_handle`
 representing a cached version of the given string,
@@ -14,6 +14,17 @@ strings will instead persist until the pool is destroyed.
 You can then store and use these handles in place of your normal strings.
 In this way, you can achieve deduplication by sacrificing a bit of convenience.
 
+## Requirements
+C++20 or later.
+Depends on:
+ - [xxhash](https://xxhash.com/)
+ - [gtest](https://github.com/google/googletest) (only for testing)
+
+stringpool can use vcpkg to acquire its dependencies automatically.
+See [INSTALL.md](INSTALL.md).
+
+
+## Usage
 ### string_handle
 A `string_handle` is a small object that refers to a string that lives in a `pool`.
 It is like a `const std::string` or `const char*` for most intents and purposes,
