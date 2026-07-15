@@ -4,14 +4,13 @@
 
 using namespace stringpool;
 
-TEST(Map, Create)
-{
+TEST(Map, Create) {
     std::map<string_handle, int> m;
 }
 
 TEST(Map, Order) {
-    std::map<string_handle, int> m;
     pool p;
+    std::map<string_handle, int> m;
     m.insert({p.intern("b"), 0});
     m.insert({p.intern("c"), 0});
     m.insert({p.intern("a"), 0});

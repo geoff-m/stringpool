@@ -9,16 +9,16 @@ TEST(UnorderedMap, Create) {
 }
 
 TEST(UnorderedMap, Insert) {
-    std::unordered_map<string_handle, int> m;
     pool p;
+    std::unordered_map<string_handle, int> m;
     m.insert({p.intern("a"), 0});
     auto it = m.begin();
     EXPECT_EQ("a", it->first.to_string());
 }
 
 TEST(UnorderedMap, Find) {
-    std::unordered_map<string_handle, int> m;
     pool p;
+    std::unordered_map<string_handle, int> m;
     auto s1 = p.intern("ab");
     auto s2 = p.concat(p.intern("a"), p.intern("b"));
     m.insert({s1, 0});
