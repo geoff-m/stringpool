@@ -49,6 +49,7 @@ Nevertheless, it has a rich set of accessors:
  - `visit_chunks(void (*callback)(std::string_view chunk, void* state), void* state)`
  - `begin_chunk()`/`end_chunk()` - chunkwise forward iterator
  - `rbegin_chunk()`/`rend_chunk()` - chunkwise backward iterator
+ - `operator==`, `operator<`
 
 Specializations of `std::hash` and of `std::formatter` are also defined.
 

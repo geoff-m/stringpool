@@ -8,6 +8,10 @@ using namespace stringpool;
 void expectStrcmp(int expectation, string_handle left, string_handle right) {
     expectSameSign(expectation, left.strcmp(right));
     expectSameSign(-expectation, right.strcmp(left));
+    if (expectation < 0)
+        EXPECT_TRUE(left < right);
+    else
+        EXPECT_FALSE(right < left);
 }
 
 void expectStrcmp(int expectation, string_handle left, const char* right) {

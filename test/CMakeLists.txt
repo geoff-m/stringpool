@@ -21,7 +21,10 @@ add_executable(test-stringpool
         src/FormatTests.cpp
         src/ChunkIteratorTests.cpp
         src/ReverseChunkIteratorTests.cpp
-        src/ReadmeTests.cpp)
+        src/ReadmeTests.cpp
+        src/OperatorEqualsTest.cpp
+        src/MapTests.cpp
+        src/UnorderedMapTests.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 

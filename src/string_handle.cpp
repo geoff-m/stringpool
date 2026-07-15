@@ -486,12 +486,14 @@ size_t string_handle::length() const {
     return size();
 }
 
-bool operator==(const string_handle& lhs, const string_handle& rhs)
-{
-    return lhs.equals(rhs);
+bool string_handle::operator<(const string_handle& other) const {
+    return strcmp(other) < 0;
 }
 
-bool operator!=(const string_handle& lhs, const string_handle& rhs)
-{
-    return !(lhs == rhs);
+bool string_handle::operator==(const string_handle& other) const {
+    return equals(other);
+}
+
+bool string_handle::operator!=(const string_handle& other) const {
+    return !equals(other);
 }

@@ -433,6 +433,10 @@ namespace stringpool {
         [[nodiscard]] chunk_iterator_backward rbegin_chunk() const;
 
         [[nodiscard]] chunk_iterator_backward rend_chunk() const;
+
+        [[nodiscard]] bool operator<(const string_handle& other) const;
+        [[nodiscard]] bool operator==(const string_handle& other) const;
+        [[nodiscard]] bool operator!=(const string_handle& other) const;
     };
 
     class pool {
@@ -574,10 +578,6 @@ namespace stringpool {
         [[nodiscard]] size_t get_data_size() const;
     };
 }
-
-bool operator==(const stringpool::string_handle& lhs, const stringpool::string_handle& rhs);
-
-bool operator!=(const stringpool::string_handle& lhs, const stringpool::string_handle& rhs);
 
 template<>
 struct std::hash<stringpool::string_handle> {
