@@ -3,10 +3,15 @@
 #include <atomic>
 #include <cassert>
 #include <cstring>
-#include <cstdlib>
 #include <stdexcept>
 
 using namespace stringpool;
+
+static internal::node emptyNode = internal::node::make_empty();
+
+string_handle::string_handle() {
+    data = &emptyNode;
+}
 
 string_handle::string_handle(internal::node* data)
     : data(data) {
@@ -138,17 +143,13 @@ bool string_handle::refcount_dec_prefix(internal::node* data) {
 }
 
 void string_handle::refcount_decrement() {
-    if (data == nullptr)
+    if (!data || data == &emptyNode)
         return;
     refcount_dec(data);
 }
 #endif
 
 string_handle::~string_handle() {
-    // debug: check for UAF
-    if (data != nullptr)
-        const auto hash = data->hash;
-
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
     refcount_decrement();
 #endif

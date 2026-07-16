@@ -301,3 +301,9 @@ node::node(NodeType type, size_t hash, pool* owner)
     : hash(hash), owner(owner), type(type)
 {
 }
+
+node node::make_empty() {
+    hasher h;
+    const auto emptyStringHash = h.hash("", 0);
+    return node(NodeType::SHORT_ATOM, emptyStringHash, 0);
+}

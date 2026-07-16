@@ -32,6 +32,8 @@ namespace stringpool {
             NodeType type;
 
             node(NodeType type, size_t hash, pool* owner);
+
+            [[nodiscard]] static node make_empty();
         };
 
         struct atom_node : node {
@@ -97,8 +99,6 @@ namespace stringpool {
         internal::node* data;
 
         string_handle(internal::node* data);
-
-        string_handle() = default;
 
         class tree_walker {
             // We assume this won't change during the lifetime of this object.
@@ -288,6 +288,8 @@ namespace stringpool {
         static size_t copy(const internal::node* data, char* destination, size_t destination_size);
 
     public:
+        string_handle();
+
         string_handle(string_handle& other);
 
         string_handle(const string_handle& other);

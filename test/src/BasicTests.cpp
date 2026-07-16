@@ -40,6 +40,13 @@ TEST(Basic, DedupEmpty) {
     expectEqual(interned, string);
 }
 
+TEST(Basic, DefaultHandle) {
+    string_handle d;
+    pool p;
+    string_handle empty = p.intern("");
+    expectEqual(empty, d);
+}
+
 TEST(Basic, AtomLengths) {
     pool p;
     for (long length = 1; length < 1024 * 1024; length <<= 1) {
@@ -71,8 +78,7 @@ TEST(Basic, ConcatDedup) {
     expectEqual(iab, concatAgain);
 }
 
-TEST(Basic, ConcatDedupReadmeExample)
-{
+TEST(Basic, ConcatDedupReadmeExample) {
     pool p;
     auto path1 = p.intern("/foo/bar/baz");
     auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
