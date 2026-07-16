@@ -55,8 +55,8 @@ Specializations of `std::hash` and of `std::formatter` are also defined.
 
 ### Concatenation
 In addition to `intern`, there is also `concat`,
-a function which takes two `string_handle` arguments
-and returns a `string_handle` representing the concatenation of the two.
+a function which takes any number of `string_handle` arguments
+and returns a `string_handle` representing the concatenation of them.
 `concat` uses only O(1) memory.
 Both `string_handle` arguments to `concat` must belong to the same pool.
 
@@ -69,8 +69,16 @@ identical to all the other lines:
 auto path1 = p.intern("/foo/bar/baz");
 auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
 auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
-auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
-auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
+
+auto path4 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
+// Equivalently,
+auto path4 = p.concatLeft(p.intern("/foo"), p.intern("/bar"), p.intern("/baz"));
+// Equivalently,
+auto path4 = p.concat(p.intern("/foo"), p.intern("/bar"), p.intern("/baz")); // Plain concat is synonymous with concatLeft.
+
+auto path5 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
+// Equivalently,
+auto path5 = p.concatRight(p.intern("/foo"), p.intern("/bar"), p.intern("/baz"));
 ```
 
 ### Efficiently accessing interned strings

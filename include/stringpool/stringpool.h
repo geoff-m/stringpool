@@ -556,42 +556,105 @@ namespace stringpool {
          */
         string_handle concat(string_handle left, string_handle right);
 
+        /**
+         * Gets a cached version of the string represented by the concatenation of the given ones,
+         * adding it to the cache if not already present.
+         * Concatenates in a left-associative way.
+         * @tparam Rest
+         * @param x The first (leftmost) substring in the result.
+         * @param y The second substring in the result.
+         * @param rest Subsequent (rightward) substrings in the result.
+         * @return Handle to the cached version of the concatenation.
+         */
         template<typename... Rest>
         string_handle concat(string_handle x, string_handle y, Rest... rest) {
             return concatLeft(x, y, rest...);
         }
 
+        /**
+         * Gets a cached version of the string represented by the concatenation of the given ones,
+         * adding it to the cache if not already present.
+         * Concatenates in a left-associative way.
+         * @tparam Rest
+         * @param x The first (leftmost) substring in the result.
+         * @param y The second substring in the result.
+         * @param rest Subsequent (rightward) substrings in the result.
+         * @return Handle to the cached version of the concatenation.
+         */
         template<typename... Rest>
         string_handle concatLeft(string_handle x, string_handle y, Rest... rest) {
             return concatLeft(concat(x, y), rest...);
         }
 
+        /**
+         * Gets a cached version of the string represented by the concatenation of the given ones,
+         * adding it to the cache if not already present.
+         * Concatenates in a right-associative way.
+         * @tparam Rest
+         * @param x The first (leftmost) substring in the result.
+         * @param y The second substring in the result.
+         * @param rest Subsequent (rightward) substrings in the result.
+         * @return Handle to the cached version of the concatenation.
+         */
         template<typename... Rest>
         string_handle concatRight(string_handle x, string_handle y, Rest... rest) {
             return concat(x, concatRight(y, rest...));
         }
 
+        /**
+         * Does nothing and returns the argument unmodified.
+         * This function is provided to ease writing of templated code.
+         * @param x The string to return.
+         * @return The argument to this function.
+         */
         string_handle concat(string_handle x) {
             return concatLeft(x);
         }
 
+        /**
+         * Does nothing and returns the argument unmodified.
+         * This function is provided to ease writing of templated code.
+         * @param x The string to return.
+         * @return The argument to this function.
+         */
         string_handle concatLeft(string_handle x) {
             return x;
         }
 
+        /**
+         * Does nothing and returns the argument unmodified.
+         * This function is provided to ease writing of templated code.
+         * @param x The string to return.
+         * @return The argument to this function.
+         */
         string_handle concatRight(string_handle x) {
             return x;
         }
 
+        /**
+         * Concatenates nothing, resulting in an empty string.
+         * This function is provided to ease writing of templated code.
+         * @return A string_handle representing the empty string.
+         */
         string_handle concat() {
             return concatLeft();
         }
 
+        /**
+         * Concatenates nothing, resulting in an empty string.
+         * This function is provided to ease writing of templated code.
+         * @return A string_handle representing the empty string.
+         */
         string_handle concatLeft() {
             string_handle empty;
             return empty;
         }
 
+        /**
+         * Concatenates nothing, resulting in an empty string.
+         * This function is provided to ease writing of templated code.
+         * @return A string_handle representing the empty string.
+         */
         string_handle concatRight() {
             string_handle empty;
             return empty;
