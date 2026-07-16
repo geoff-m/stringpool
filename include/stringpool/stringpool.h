@@ -437,7 +437,9 @@ namespace stringpool {
         [[nodiscard]] chunk_iterator_backward rend_chunk() const;
 
         [[nodiscard]] bool operator<(const string_handle& other) const;
+
         [[nodiscard]] bool operator==(const string_handle& other) const;
+
         [[nodiscard]] bool operator!=(const string_handle& other) const;
     };
 
@@ -553,6 +555,47 @@ namespace stringpool {
          * @return Handle to the cached version of the concatenation.
          */
         string_handle concat(string_handle left, string_handle right);
+
+        template<typename... Rest>
+        string_handle concat(string_handle x, string_handle y, Rest... rest) {
+            return concatLeft(x, y, rest...);
+        }
+
+        template<typename... Rest>
+        string_handle concatLeft(string_handle x, string_handle y, Rest... rest) {
+            return concatLeft(concat(x, y), rest...);
+        }
+
+        template<typename... Rest>
+        string_handle concatRight(string_handle x, string_handle y, Rest... rest) {
+            return concat(x, concatRight(y, rest...));
+        }
+
+        string_handle concat(string_handle x) {
+            return concatLeft(x);
+        }
+
+        string_handle concatLeft(string_handle x) {
+            return x;
+        }
+
+        string_handle concatRight(string_handle x) {
+            return x;
+        }
+
+        string_handle concat() {
+            return concatLeft();
+        }
+
+        string_handle concatLeft() {
+            string_handle empty;
+            return empty;
+        }
+
+        string_handle concatRight() {
+            string_handle empty;
+            return empty;
+        }
 
         /**
          * Gets the overall number of bytes in strings passed to intern calls.
