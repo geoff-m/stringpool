@@ -1,7 +1,6 @@
 #include <cstring>
 #include <gtest/gtest.h>
 #include "stringpool/stringpool.h"
-#include "Utility.h"
 
 using namespace stringpool;
 
@@ -50,7 +49,7 @@ void stringViewCallback(std::string_view chunk, void* state) {
     evs->compare_next(chunk.data(), chunk.size());
 }
 
-void testVisitEquals(const std::string& expected, string_handle actual) {
+void testVisitEquals(const std::string& expected, const string_handle& actual) {
     {
         EqualityVisitorState evs(expected.c_str(), expected.size());
         actual.visit_chunks(cStringCallback, &evs);
@@ -65,7 +64,7 @@ void testVisitEquals(const std::string& expected, string_handle actual) {
 
 void testVisitEquals(const std::string& expected) {
     pool p;
-    auto actual = p.intern(expected.c_str(), expected.size());
+    const auto actual = p.intern(expected.c_str(), expected.size());
     testVisitEquals(expected, actual);
 }
 
@@ -79,41 +78,41 @@ TEST(Visit, ShortAtom) {
 }
 
 TEST(Visit, LongAtom) {
-    std::string expected(1024, 'a');
+    const std::string expected(1024, 'a');
     testVisitEquals(expected);
 }
 
 TEST(Visit, ConcatLongChildren) {
     pool p;
-    std::string a(1024, 'a');
-    std::string b(1024, 'b');
-    auto ia = p.intern(a.c_str());
-    auto ib = p.intern(b.c_str());
-    auto iab = p.concat(ia, ib);
-    auto expected = a + b;
+    const std::string a(1024, 'a');
+    const std::string b(1024, 'b');
+    const auto ia = p.intern(a.c_str());
+    const auto ib = p.intern(b.c_str());
+    const auto iab = p.concat(ia, ib);
+    const auto expected = a + b;
     testVisitEquals(expected, iab);
 }
 
 TEST(Visit, ConcatLeftShort) {
     {
         pool p;
-        std::string a = "a";
-        std::string b(1024, 'b');
-        auto ia = p.intern(a.c_str());
-        auto ib = p.intern(b.c_str());
-        auto iab = p.concat(ia, ib);
-        auto expected = a + b;
+        const std::string a = "a";
+        const std::string b(1024, 'b');
+        const auto ia = p.intern(a.c_str());
+        const auto ib = p.intern(b.c_str());
+        const auto iab = p.concat(ia, ib);
+        const auto expected = a + b;
         testVisitEquals(expected, iab);
     }
 }
 
 TEST(Visit, ConcatRightShort) {
     pool p;
-    std::string a(1024, 'a');
-    std::string b = "b";
-    auto ia = p.intern(a.c_str());
-    auto ib = p.intern(b.c_str());
-    auto iab = p.concat(ia, ib);
-    auto expected = a + b;
+    const std::string a(1024, 'a');
+    const std::string b = "b";
+    const auto ia = p.intern(a.c_str());
+    const auto ib = p.intern(b.c_str());
+    const auto iab = p.concat(ia, ib);
+    const auto expected = a + b;
     testVisitEquals(expected, iab);
 }

@@ -5,18 +5,18 @@
 
 using namespace stringpool;
 
-void expectMemcmp(int expectation, string_handle left, string_handle right, size_t length)
+void expectMemcmp(int expectation, const string_handle& left, const string_handle& right, size_t length)
 {
     expectSameSign(expectation, left.memcmp(right, length));
     expectSameSign(-expectation, right.memcmp(left, length));
 }
 
-void expectMemcmp(int expectation, string_handle left, const char* right, size_t length)
+void expectMemcmp(int expectation, const string_handle& left, const char* right, size_t length)
 {
     expectSameSign(expectation, left.memcmp(right, length));
 }
 
-void expectMemcmp(int expectation, const char* left, string_handle right, size_t length)
+void expectMemcmp(int expectation, const char* left, const string_handle& right, size_t length)
 {
     expectSameSign(-expectation, right.memcmp(left, length));
 }
@@ -24,8 +24,8 @@ void expectMemcmp(int expectation, const char* left, string_handle right, size_t
 void testMemcmp(const char* string1, const char* string2, size_t length)
 {
     pool p;
-    auto interned1 = p.intern(string1);
-    auto interned2 = p.intern(string2);
+    const auto interned1 = p.intern(string1);
+    const auto interned2 = p.intern(string2);
     const auto expectedComparison = std::memcmp(string1, string2, length);
     expectMemcmp(expectedComparison, interned1, interned2, length);
     expectMemcmp(expectedComparison, interned1, string2, length);
@@ -55,12 +55,12 @@ TEST(Memcmp, Length10_11)
 TEST(Memcmp, ConcatAtomConcatLongLong)
 {
     pool p;
-    auto a = p.concat(
+    const auto a = p.concat(
         p.intern("a"),
         p.concat(
             p.intern("leaf0123456789"),
             p.intern("leaf9876543210"))); // ends with 0
-    auto b = p.concat(
+    const auto b = p.concat(
         p.intern("a"),
         p.concat(
             p.intern("leaf0123456789"),
@@ -71,10 +71,10 @@ TEST(Memcmp, ConcatAtomConcatLongLong)
 TEST(Memcmp, ConcatLongLong)
 {
     pool p;
-    auto a = p.concat(
+    const auto a = p.concat(
         p.intern("leaf0123456789"),
         p.intern("leaf9876543210")); // ends with 0
-    auto b = p.concat(
+    const auto b = p.concat(
         p.intern("leaf0123456789"),
         p.intern("leaf9876543211")); // ends with 1
     expectMemcmp(-1, a, b, 28);

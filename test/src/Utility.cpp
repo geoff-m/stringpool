@@ -31,9 +31,9 @@ void expectSameSign(int x, int y) {
         failSameSign(x, y);
 }
 
-void expectEqual(const string_handle interned, const char* str) {
+void expectEqual(const string_handle& interned, const char* str) {
     const auto len = strlen(str);
-    bool eq =  interned.equals(str, len);
+    const bool eq =  interned.equals(str, len);
     EXPECT_TRUE(eq);
     EXPECT_TRUE(interned.equals(str, len));
     EXPECT_TRUE(interned.equals(str));
@@ -41,7 +41,7 @@ void expectEqual(const string_handle interned, const char* str) {
     EXPECT_EQ(0, interned.memcmp(str, len));
 }
 
-void expectEqual(const string_handle x, const string_handle y) {
+void expectEqual(const string_handle& x, const string_handle& y) {
     EXPECT_TRUE(x.equals(y));
     EXPECT_TRUE(y.equals(x));
     EXPECT_TRUE(x == y);
@@ -54,7 +54,7 @@ void expectEqual(const string_handle x, const string_handle y) {
     EXPECT_EQ(0, y.memcmp(x, y.size()));
 }
 
-void expectLength(size_t length, const string_handle interned) {
+void expectLength(size_t length, const string_handle& interned) {
     EXPECT_EQ(length, interned.size());
     EXPECT_EQ(length, interned.length());
 }

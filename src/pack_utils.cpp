@@ -1,6 +1,5 @@
 #include "stringpool/stringpool.h"
 #include <cassert>
-#include <cstdlib>
 
 namespace stringpool::internal
 {
@@ -15,12 +14,12 @@ namespace stringpool::internal
             }
         case NodeType::ATOM:
             {
-                auto len = reinterpret_cast<const atom_node*>(node)->length;
+                const auto len = reinterpret_cast<const atom_node*>(node)->length;
                 return len;
             }
         case NodeType::CONCAT:
             {
-                auto len = reinterpret_cast<const concat_node*>(node)->length;
+                const auto len = reinterpret_cast<const concat_node*>(node)->length;
                 return len;
             }
         default:

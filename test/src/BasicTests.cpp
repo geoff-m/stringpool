@@ -10,7 +10,7 @@ TEST(Basic, Create) {
 
 TEST(Basic, Add) {
     pool p;
-    const auto string = "hello";
+    constexpr auto string = "hello";
     const auto interned = p.intern(string);
     expectEqual(interned, string);
     expectLength(strlen(string), interned);
@@ -18,7 +18,7 @@ TEST(Basic, Add) {
 
 TEST(Basic, Dedup) {
     pool p;
-    const auto string = "hello";
+    constexpr auto string = "hello";
     const auto interned1 = p.intern(string);
     const auto interned2 = p.intern(string);
     expectEqual(interned1, interned2);
@@ -27,7 +27,7 @@ TEST(Basic, Dedup) {
 
 TEST(Basic, Empty) {
     pool p;
-    const auto string = "";
+    constexpr auto string = "";
     const auto interned = p.intern(string);
     expectEqual(interned, string);
     expectLength(0, interned);
@@ -35,7 +35,7 @@ TEST(Basic, Empty) {
 
 TEST(Basic, DedupEmpty) {
     pool p;
-    const auto string = "";
+    constexpr auto string = "";
     const auto interned = p.intern(string);
     expectEqual(interned, string);
 }
@@ -52,32 +52,32 @@ TEST(Basic, AtomLengths) {
 
 TEST(Basic, Concat1Plus1) {
     pool p;
-    auto ia = p.intern("a");
-    auto ib = p.intern("b");
-    auto iab = p.concat(ia, ib);
+    const auto ia = p.intern("a");
+    const auto ib = p.intern("b");
+    const auto iab = p.concat(ia, ib);
     expectEqual(iab, "ab");
     expectLength(2, iab);
 }
 
 TEST(Basic, ConcatDedup) {
     pool p;
-    auto ia = p.intern("a");
-    auto ib = p.intern("b");
-    auto iab = p.concat(ia, ib);
+    const auto ia = p.intern("a");
+    const auto ib = p.intern("b");
+    const auto iab = p.concat(ia, ib);
     expectEqual(iab, "ab");
-    auto atomAgain = p.intern("ab");
+    const auto atomAgain = p.intern("ab");
     expectEqual(iab, atomAgain);
-    auto concatAgain = p.concat(ia, ib);
+    const auto concatAgain = p.concat(ia, ib);
     expectEqual(iab, concatAgain);
 }
 
 TEST(Basic, ConcatDedupReadmeExample) {
     pool p;
-    auto path1 = p.intern("/foo/bar/baz");
-    auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
-    auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
-    auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
-    auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
+    const auto path1 = p.intern("/foo/bar/baz");
+    const auto path2 = p.concat(p.intern("/foo"), p.intern("/bar/baz"));
+    const auto path3 = p.concat(p.intern("/foo/bar"), p.intern("/baz"));
+    const auto path4 = p.concat(p.intern("/foo"), p.concat(p.intern("/bar"), p.intern("/baz")));
+    const auto path5 = p.concat(p.concat(p.intern("/foo"), p.intern("/bar")), p.intern("/baz"));
     EXPECT_TRUE(path1 == path2);
     EXPECT_TRUE(path1 == path3);
     EXPECT_TRUE(path1 == path4);
@@ -86,48 +86,48 @@ TEST(Basic, ConcatDedupReadmeExample) {
 
 TEST(Basic, ConcatEmpty) {
     pool p;
-    auto e1 = p.intern("");
-    auto e2 = p.concat(e1, e1);
+    const auto e1 = p.intern("");
+    const auto e2 = p.concat(e1, e1);
     expectEqual(e2, "");
 }
 
 TEST(Basic, Concat8Plus8) {
     pool p;
-    auto ia = p.intern("aaaaaaaa");
-    auto ib = p.intern("bbbbbbbb");
-    auto iab = p.concat(ia, ib);
+    const auto ia = p.intern("aaaaaaaa");
+    const auto ib = p.intern("bbbbbbbb");
+    const auto iab = p.concat(ia, ib);
     expectEqual(iab, "aaaaaaaabbbbbbbb");
 }
 
 TEST(Basic, Concat9Plus9) {
     pool p;
-    auto ia = p.intern("aaaaaaaaa");
-    auto ib = p.intern("bbbbbbbbb");
-    auto iab = p.concat(ia, ib);
+    const auto ia = p.intern("aaaaaaaaa");
+    const auto ib = p.intern("bbbbbbbbb");
+    const auto iab = p.concat(ia, ib);
     expectEqual(iab, "aaaaaaaaabbbbbbbbb");
 }
 
 TEST(Basic, Concat0Plus9) {
     pool p;
-    auto ia = p.intern("");
-    auto ib = p.intern("bbbbbbbbb");
-    auto iab = p.concat(ia, ib);
+    const auto ia = p.intern("");
+    const auto ib = p.intern("bbbbbbbbb");
+    const auto iab = p.concat(ia, ib);
     expectEqual(iab, "bbbbbbbbb");
 }
 
 TEST(Basic, Concat9Plus0) {
     pool p;
-    auto ia = p.intern("aaaaaaaaa");
-    auto ib = p.intern("");
-    auto iab = p.concat(ia, ib);
+    const auto ia = p.intern("aaaaaaaaa");
+    const auto ib = p.intern("");
+    const auto iab = p.concat(ia, ib);
     expectEqual(iab, "aaaaaaaaa");
 }
 
 TEST(Basic, Concat0Plus0) {
     pool p;
-    auto ia = p.intern("");
-    auto ib = p.intern("");
-    auto iab = p.concat(ia, ib);
+    const auto ia = p.intern("");
+    const auto ib = p.intern("");
+    const auto iab = p.concat(ia, ib);
     expectEqual(iab, "");
     expectEqual(iab, ia);
     expectEqual(iab, ib);
@@ -135,7 +135,7 @@ TEST(Basic, Concat0Plus0) {
 
 TEST(Basic, CopyConcatShortLong) {
     pool p;
-    auto a = p.concat(
+    const auto a = p.concat(
         p.intern("a"),
         p.intern("leaf0123456789"));
     constexpr auto len = 64;
@@ -146,7 +146,7 @@ TEST(Basic, CopyConcatShortLong) {
 
 TEST(Basic, CopyConcatLongLong) {
     pool p;
-    auto a = p.concat(
+    const auto a = p.concat(
         p.intern("leaf0123456789"),
         p.intern("leaf9876543210"));
     constexpr auto len = 64;
@@ -157,7 +157,7 @@ TEST(Basic, CopyConcatLongLong) {
 
 TEST(Basic, CopyConcatAtomConcatLongLong) {
     pool p;
-    auto a = p.concat(
+    const auto a = p.concat(
         p.intern("a"),
         p.concat(
             p.intern("leaf0123456789"),
@@ -170,7 +170,7 @@ TEST(Basic, CopyConcatAtomConcatLongLong) {
 
 TEST(Basic, CopyConcatConcatLongLongAtom) {
     pool p;
-    auto a = p.concat(
+    const auto a = p.concat(
         p.concat(
             p.intern("leaf0123456789"),
             p.intern("leaf9876543210")),
@@ -183,7 +183,7 @@ TEST(Basic, CopyConcatConcatLongLongAtom) {
 
 TEST(Basic, CopyToZeroSizeDestination) {
     pool p;
-    auto s = p.intern("abc");
+    const auto s = p.intern("abc");
     char c = 'x';
     const auto copiedLength = s.copy(&c, 0);
     EXPECT_EQ(0, copiedLength);
@@ -192,7 +192,7 @@ TEST(Basic, CopyToZeroSizeDestination) {
 
 TEST(Basic, CopyFromZeroSizeSource) {
     pool p;
-    auto s = p.intern("");
+    const auto s = p.intern("");
     char c = 'x';
     const auto copiedLength = s.copy(&c, s.length());
     EXPECT_EQ(0, copiedLength);

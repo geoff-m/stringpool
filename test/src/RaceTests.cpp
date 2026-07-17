@@ -19,7 +19,7 @@ TEST(Race, InternShortAtom)
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
     pool pool(1000);
-    const auto threadCount = 2; // experientially, 2 threads is enough to surface race bugs
+    constexpr auto threadCount = 2; // experientially, 2 threads is enough to surface race bugs
     for (int i = 0; i < threadCount; ++i)
         threads.emplace_back([&]
         {
@@ -63,8 +63,8 @@ TEST(Race, InternShortConcat)
                     break;
                 snprintf(leftBuf, bufferSize, "%d", leftInt);
                 snprintf(rightBuf, bufferSize, "%d", rightInt);
-                auto leftIntern = pool.intern(leftBuf);
-                auto rightIntern = pool.intern(rightBuf);
+                const auto leftIntern = pool.intern(leftBuf);
+                const auto rightIntern = pool.intern(rightBuf);
                 pool.concat(leftIntern, rightIntern);
             }
         });
@@ -78,13 +78,13 @@ TEST(Race, InternLongConcat)
     std::vector<std::thread> threads;
     constexpr auto TOTAL_INTERNS = 10000;
     pool pool(1000);
-    const auto threadCount = 2;// std::min(4u, std::thread::hardware_concurrency());
-    const auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
+    constexpr auto threadCount = 2;// std::min(4u, std::thread::hardware_concurrency());
+    constexpr auto INTERNS_PER_THREAD = TOTAL_INTERNS / threadCount;
     for (int i = 0; i < threadCount; ++i)
         threads.emplace_back([&]
         {
             // 19 periods
-            const auto atomFormat = "%d...................";
+            constexpr auto atomFormat = "%d...................";
             constexpr auto bufferSize = 32;
             char buf[bufferSize] = {};
             for (int string = 0; string < INTERNS_PER_THREAD; ++string)
@@ -102,8 +102,8 @@ TEST(Race, InternLongConcat)
                     break;
                 snprintf(leftBuf, bufferSize, atomFormat, leftInt);
                 snprintf(rightBuf, bufferSize, atomFormat, rightInt);
-                auto leftIntern = pool.intern(leftBuf);
-                auto rightIntern = pool.intern(rightBuf);
+                const auto leftIntern = pool.intern(leftBuf);
+                const auto rightIntern = pool.intern(rightBuf);
                 auto concat = pool.concat(leftIntern, rightIntern);
             }
         });

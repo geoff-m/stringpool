@@ -23,9 +23,9 @@ void testCharIterator(const std::string& string, const string_handle& sh) {
 
 TEST(CharIterator, Empty) {
     pool p;
-    auto e = p.intern("");
-    auto begin = e.begin();
-    auto end = e.end();
+    const auto e = p.intern("");
+    const auto begin = e.begin();
+    const auto end = e.end();
     EXPECT_EQ(end, begin);
 }
 
@@ -35,7 +35,7 @@ TEST(CharIterator, One) {
 
 TEST(CharIterator, PostfixIncrement) {
     pool p;
-    auto e = p.intern("ab");
+    const auto e = p.intern("ab");
     auto it = e.begin();
     EXPECT_EQ('a', *it);
     EXPECT_EQ('a', *it++);
@@ -44,7 +44,7 @@ TEST(CharIterator, PostfixIncrement) {
 }
 
 TEST(CharIterator, LongAtom) {
-    std::string s(512, 'a');
+    const std::string s(512, 'a');
     testCharIterator(s.c_str());
 }
 

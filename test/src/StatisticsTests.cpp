@@ -35,7 +35,7 @@ void testStats(const char* string, size_t length) {
 }
 
 TEST(Statistics, Empty) {
-    pool p;
+    const pool p;
     EXPECT_EQ(0, p.get_data_size());
     EXPECT_EQ(0, p.get_total_intern_request_count());
     EXPECT_EQ(0, p.get_total_intern_request_hits());

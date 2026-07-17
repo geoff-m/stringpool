@@ -6,8 +6,8 @@ using namespace stringpool;
 TEST(OperatorEquals, EqualSamePool)
 {
     pool p;
-    auto x =  p.intern("abc");
-    auto y = p.intern("abc");
+    const auto x =  p.intern("abc");
+    const auto y = p.intern("abc");
     EXPECT_TRUE(x == y);
     EXPECT_FALSE(x != y);
 }
@@ -15,8 +15,8 @@ TEST(OperatorEquals, EqualSamePool)
 TEST(OperatorEquals, UnequalSamePool)
 {
     pool p;
-    auto x =  p.intern("abc");
-    auto y = p.intern("def");
+    const auto x =  p.intern("abc");
+    const auto y = p.intern("def");
     EXPECT_FALSE(x == y);
     EXPECT_TRUE(x != y);
 }

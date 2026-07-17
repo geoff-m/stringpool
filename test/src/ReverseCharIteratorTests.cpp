@@ -24,9 +24,9 @@ void testReverseCharIterator(const std::string& string, const string_handle& sh)
 
 TEST(ReverseCharIterator, Empty) {
     pool p;
-    auto e = p.intern("");
-    auto begin = e.rbegin();
-    auto end = e.rend();
+    const auto e = p.intern("");
+    const auto begin = e.rbegin();
+    const auto end = e.rend();
     EXPECT_EQ(end, begin);
 }
 
@@ -36,7 +36,7 @@ TEST(ReverseCharIterator, One) {
 
 TEST(ReverseCharIterator, PostfixIncrement) {
     pool p;
-    auto e = p.intern("ab");
+    const auto e = p.intern("ab");
     auto it = e.rbegin();
     EXPECT_EQ('b', *it);
     EXPECT_EQ('b', *it++);
@@ -45,7 +45,7 @@ TEST(ReverseCharIterator, PostfixIncrement) {
 }
 
 TEST(ReverseCharIterator, LongAtom) {
-    std::string s(512, 'a');
+    const std::string s(512, 'a');
     testReverseCharIterator(s.c_str());
 }
 

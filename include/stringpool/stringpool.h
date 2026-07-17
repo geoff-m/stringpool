@@ -279,9 +279,9 @@ namespace stringpool {
 
         static void actually_delete_unsafe(internal::node* data, pool& owner, size_t hash);
 
-        static void maybe_decrement_children_refcounts(internal::node* data, pool& owner);
+        static void maybe_decrement_children_refcounts(const internal::node* data, pool& owner);
 
-        static void maybe_increment_children_refcounts(internal::node* data);
+        static void maybe_increment_children_refcounts(const internal::node* data);
 
         static void visit_chunks(const internal::node* node,
                                  void (*callback)(const char* piece, size_t pieceSize, void* state),
@@ -485,8 +485,8 @@ namespace stringpool {
         // Caller must hold reader (or writer) lock on this and left and right owners.
         InternResult do_concat_unsafe(
             size_t hash,
-            string_handle left,
-            string_handle right,
+            const string_handle& left,
+            const string_handle& right,
             bool haveWriterLock,
             internal::weak_string_handle& result);
 
@@ -609,7 +609,7 @@ namespace stringpool {
          * @param x The string to return.
          * @return The argument to this function.
          */
-        string_handle concat(string_handle x) {
+        string_handle concat(const string_handle& x) {
             return concatLeft(x);
         }
 
@@ -698,7 +698,7 @@ struct std::hash<stringpool::string_handle> {
 
 template<>
 struct std::formatter<stringpool::string_handle> {
-    constexpr auto parse(std::format_parse_context& ctx) {
+    constexpr auto parse(const std::format_parse_context& ctx) {
         if (ctx.begin() != ctx.end() && *ctx.begin() != '}') {
             throw std::format_error("Unsupported format specifier");
         }

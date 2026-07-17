@@ -5,7 +5,7 @@
 
 using namespace stringpool;
 
-void expectStrcmp(int expectation, string_handle left, string_handle right) {
+void expectStrcmp(int expectation, const string_handle& left, const string_handle& right) {
     expectSameSign(expectation, left.strcmp(right));
     expectSameSign(-expectation, right.strcmp(left));
     if (expectation < 0)
@@ -14,36 +14,36 @@ void expectStrcmp(int expectation, string_handle left, string_handle right) {
         EXPECT_FALSE(right < left);
 }
 
-void expectStrcmp(int expectation, string_handle left, const char* right) {
+void expectStrcmp(int expectation, const string_handle& left, const char* right) {
     expectSameSign(expectation, left.strcmp(right));
 }
 
-void expectStrcmp(int expectation, const char* left, string_handle right) {
+void expectStrcmp(int expectation, const char* left, const string_handle& right) {
     expectSameSign(-expectation, right.strcmp(left));
 }
 
 TEST(Strcmp, Empty) {
     pool p;
-    auto e = p.intern("");
+    const auto e = p.intern("");
     expectStrcmp(0, e, e);
 }
 
 TEST(Strcmp, EqualLength1) {
     pool p;
-    auto e = p.intern("a");
+    const auto e = p.intern("a");
     expectStrcmp(0, e, e);
 }
 
 TEST(Strcmp, EqualLenth10) {
     pool p;
-    auto e = p.intern("0123456789");
+    const auto e = p.intern("0123456789");
     expectStrcmp(0, e, e);
 }
 
 void testStrcmp(const char* string1, const char* string2) {
     pool p;
-    auto interned1 = p.intern(string1);
-    auto interned2 = p.intern(string2);
+    const auto interned1 = p.intern(string1);
+    const auto interned2 = p.intern(string2);
     const auto expectedComparison = std::strcmp(string1, string2);
     expectStrcmp(expectedComparison, interned1, interned2);
     expectStrcmp(expectedComparison, interned1, string2);
@@ -64,11 +64,11 @@ TEST(Strcmp, Length10_11) {
 
 TEST(Strcmp, ConcatAtomConcatLongLong) {
     pool p;
-    auto a = p.concat(
+    const auto a = p.concat(
         p.intern("a"),
         p.concat(
             p.intern("leaf0123456789"),
             p.intern("leaf9876543210")));
-    auto b = p.intern("b");
+    const auto b = p.intern("b");
     expectStrcmp(-1, a, b);
 }

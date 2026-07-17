@@ -80,7 +80,7 @@ void string_handle::refcount_increment() {
     maybe_increment_children_refcounts(data);
 }
 
-void string_handle::maybe_decrement_children_refcounts(internal::node* data, pool& owner) {
+void string_handle::maybe_decrement_children_refcounts(const internal::node* data, pool& owner) {
     if (data->type == internal::NodeType::CONCAT) {
         const auto* concatData = reinterpret_cast<const internal::concat_node*>(data);
         auto* left = concatData->left;
@@ -90,7 +90,7 @@ void string_handle::maybe_decrement_children_refcounts(internal::node* data, poo
     }
 }
 
-void string_handle::maybe_increment_children_refcounts(internal::node* data) {
+void string_handle::maybe_increment_children_refcounts(const internal::node* data) {
     if (data->type == internal::NodeType::CONCAT) {
         const auto* concatData = reinterpret_cast<const internal::concat_node*>(data);
         auto* left = concatData->left;
@@ -101,13 +101,13 @@ void string_handle::maybe_increment_children_refcounts(internal::node* data) {
 }
 
 void string_handle::actually_delete_unsafe(internal::node* data, pool& owner, size_t hash) {
-    auto tableIt = owner.table.find(hash);
+    const auto tableIt = owner.table.find(hash);
     if (tableIt == owner.table.end()) {
         return;
     }
     auto& list = tableIt->second;
     for (auto listIt = list.begin(); listIt != list.end(); ++listIt) {
-        auto& entry = *listIt;
+        const auto& entry = *listIt;
         if (entry.data == data) {
             if (get_refcount(data) != 0) {
                 // lost race; some other thread incremented it
@@ -143,7 +143,7 @@ void string_handle::refcount_dec_unsafe(internal::node* data, pool& owner) {
 }
 
 bool string_handle::refcount_dec_prefix(internal::node* data) {
-    auto refCount = get_refcount(data);
+    const auto refCount = get_refcount(data);
     const auto newRefCount = --refCount;
     return newRefCount == 0;
 }
@@ -185,7 +185,7 @@ size_t string_handle::hash() const {
     hasher h;
     tree_walker walker(data);
     const char* piece;
-    while (size_t pieceLength = walker.get_next_bytes(&piece)) {
+    while (const size_t pieceLength = walker.get_next_bytes(&piece)) {
         h.add(piece, pieceLength);
     }
     return h.finish();
@@ -196,7 +196,7 @@ void string_handle::visit_chunks(const internal::node* node,
                                  void* state) {
     tree_walker walker(node);
     const char* piece;
-    while (size_t pieceLength = walker.get_next_bytes(&piece)) {
+    while (const size_t pieceLength = walker.get_next_bytes(&piece)) {
         callback(piece, pieceLength, state);
     }
 }
@@ -219,7 +219,7 @@ int string_handle::strcmp(const char* rhs) const {
     tree_walker walker(data);
     const char* piece;
     size_t comparedChars = 0;
-    while (size_t pieceLength = walker.get_next_bytes(&piece)) {
+    while (const size_t pieceLength = walker.get_next_bytes(&piece)) {
         const auto thisResult = std::strncmp(piece, rhs + comparedChars, pieceLength);
         if (thisResult != 0)
             return thisResult;
@@ -483,7 +483,7 @@ string_handle::chunk_iterator_backward string_handle::rend_chunk() const {
 }
 
 size_t string_handle::size() const {
-    auto ret = get_length(data);
+    const auto ret = get_length(data);
     return ret;
 }
 

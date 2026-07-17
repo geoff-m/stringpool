@@ -49,10 +49,10 @@ pool::pool(size_t initial_table_capacity, allocator* allocator)
 pool::~pool()
 {
     std::lock_guard lock(tableRwMutex);
-    for (auto kvp : table)
+    for (const auto& kvp : table)
     {
-        auto& list = kvp.second;
-        for (auto& listIt : list)
+        const auto& list = kvp.second;
+        for (const auto& listIt : list)
         {
             free_buffer(listIt.data);
         }
@@ -68,11 +68,11 @@ string_handle pool::intern(const char* string)
 pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_t size, bool haveWriterLock,
                                           weak_string_handle& result)
 {
-    auto it = table.find(hash);
+    const auto it = table.find(hash);
     if (it != table.end())
     {
         auto existingEntries = it->second;
-        for (auto existingEntry : existingEntries)
+        for (const auto existingEntry : existingEntries)
         {
             if (string_handle::equals(existingEntry.data, string, size))
             {
@@ -84,7 +84,7 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
         if (!haveWriterLock)
             return InternResult::NeedWriterLock;
         node* atom = add_atom_unsafe(string, size, hash);
-        weak_string_handle ret(atom);
+        const weak_string_handle ret(atom);
         existingEntries.push_back(ret);
         result = ret;
         ++internMisses;
@@ -94,8 +94,8 @@ pool::InternResult pool::do_intern_unsafe(size_t hash, const char* string, size_
     if (!haveWriterLock)
         return InternResult::NeedWriterLock;
     node* atom = add_atom_unsafe(string, size, hash);
-    auto r = table.emplace(hash, std::list<weak_string_handle>());
-    weak_string_handle ret(atom);
+    const auto r = table.emplace(hash, std::list<weak_string_handle>());
+    const weak_string_handle ret(atom);
     r.first->second.push_back(ret);
     result = ret;
     ++internMisses;
@@ -109,12 +109,12 @@ string_handle pool::intern(const char* string, size_t size)
     ++totalInternRequestCount;
     totalInternRequestSize += size;
     weak_string_handle result{};
-    auto resultWithRead = do_intern_unsafe(hash, string, size, false, result);
+    const auto resultWithRead = do_intern_unsafe(hash, string, size, false, result);
     if (resultWithRead == InternResult::NeedWriterLock)
     {
         readLock.unlock();
         std::lock_guard writeLock(tableRwMutex);
-        [[maybe_unused]] auto resultWithWrite = do_intern_unsafe(hash, string, size, true, result);
+        [[maybe_unused]] const auto resultWithWrite = do_intern_unsafe(hash, string, size, true, result);
         assert(resultWithWrite == InternResult::Success);
         return result.make_strong();
     }
@@ -157,7 +157,7 @@ short_atom_node* pool::allocate_short_atom(size_t stringSize, size_t hash, pool*
 }
 
 concat_node* pool::allocate_concat(size_t hash, pool* owner) {
-    const auto nodeSize = sizeof(concat_node);
+    constexpr auto nodeSize = sizeof(concat_node);
     auto* ret = alloc->allocate(nodeSize, alignof(size_t));
     new (ret) node(NodeType::CONCAT, hash, owner);
     totalDataSize += nodeSize;
@@ -213,12 +213,12 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
     {
         // We will store the concatenation as a single atom node.
         short_atom_node* shortAtom = allocate_short_atom(totalLength, hash, this);
-        shortAtom->length =  static_cast<char>(totalLength);
+        shortAtom->length =  static_cast<unsigned char>(totalLength);
         left.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node), leftLength);
         right.copy(reinterpret_cast<char*>(shortAtom) + sizeof(short_atom_node)+ leftLength, rightLength);
         assert(get_length(shortAtom) == totalLength);
-        auto r = table.emplace(hash, std::list<weak_string_handle>());
-        weak_string_handle ret(shortAtom);
+        const auto r = table.emplace(hash, std::list<weak_string_handle>());
+        const weak_string_handle ret(shortAtom);
         r.first->second.push_back(ret);
         return ret;
     }
@@ -232,22 +232,22 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
         concat->length = totalLength & 0x00ffffffffffffff;
         concat->left = left.data;
         concat->right = right.data;
-        auto r = table.emplace(hash, std::list<weak_string_handle>());
+        const auto r = table.emplace(hash, std::list<weak_string_handle>());
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
         left.refcount_increment();
         right.refcount_increment();
 #endif
-        weak_string_handle ret(concat);
+        const weak_string_handle ret(concat);
         r.first->second.push_back(ret);
         return ret;
     }
 }
 
 // Attempts to intern the concatenation of the given string handles, or else return its handle if it already exists in the cache.
-pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, string_handle right, bool haveWriterLock,
+pool::InternResult pool::do_concat_unsafe(size_t hash, const string_handle& left, const string_handle& right, bool haveWriterLock,
                                           weak_string_handle& result)
 {
-    auto it = table.find(hash);
+    const auto it = table.find(hash);
     if (it == table.end())
     {
         // Nothing in table has this hash.
@@ -256,8 +256,8 @@ pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, strin
         result = add_concat_unsafe(hash, left, right);
         return InternResult::Success;
     }
-    auto existingEntries = it->second;
-    for (auto existingEntry : existingEntries)
+    const auto existingEntries = it->second;
+    for (const auto existingEntry : existingEntries)
     {
         if (string_handle::concat_equals(existingEntry.data, left.data, right.data))
         {
@@ -295,12 +295,12 @@ string_handle pool::concat(string_handle left, string_handle right)
     const auto hash = h.finish();
     weak_string_handle result{};
     std::shared_lock readLock(tableRwMutex);
-    auto readResult = do_concat_unsafe(hash, left, right, false, result);
+    const auto readResult = do_concat_unsafe(hash, left, right, false, result);
     if (readResult == InternResult::NeedWriterLock)
     {
         readLock.unlock();
         std::lock_guard writeLock(tableRwMutex);
-        [[maybe_unused]] auto writeResult = do_concat_unsafe(hash, left, right, true, result);
+        [[maybe_unused]] const auto writeResult = do_concat_unsafe(hash, left, right, true, result);
         assert(writeResult == InternResult::Success);
         return result.make_strong();
     }

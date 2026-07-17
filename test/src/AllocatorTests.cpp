@@ -1,8 +1,6 @@
 #include <gtest/gtest.h>
 #include "stringpool/stringpool.h"
 #include <atomic>
-#include <cstddef>
-#include "Utility.h"
 
 using namespace stringpool;
 
@@ -48,7 +46,7 @@ private:
 
 TEST(Allocator, ShortAtom) {
     Allocator a;
-    const auto string = "hello";
+    constexpr auto string = "hello";
     size_t memoryUsed;
     {
         pool p(&a);
@@ -62,8 +60,8 @@ TEST(Allocator, ShortAtom) {
 
 TEST(Allocator, LongAtom) {
     Allocator a;
-    const auto length = 1234;
-    auto string = std::make_unique<char[]>(length);
+    constexpr auto length = 1234;
+    const auto string = std::make_unique<char[]>(length);
     memset(string.get(), 'a', length);
     string.get()[length - 1] = 0;
     size_t memoryUsed;
@@ -79,11 +77,11 @@ TEST(Allocator, LongAtom) {
 
 TEST(Allocator, Concat) {
     Allocator a;
-    const auto length = 1234;
-    auto a1 = std::make_unique<char[]>(length);
+    constexpr auto length = 1234;
+    const auto a1 = std::make_unique<char[]>(length);
     memset(a1.get(), 'a', length);
     a1.get()[length - 1] = 0;
-    auto a2 = std::make_unique<char[]>(length);
+    const auto a2 = std::make_unique<char[]>(length);
     memset(a2.get(), 'b', length);
     a2.get()[length - 1] = 0;
     size_t memoryUsed;
