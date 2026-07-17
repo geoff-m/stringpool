@@ -20,6 +20,10 @@ string_handle::string_handle(internal::node* data)
 #endif
 }
 
+bool string_handle::is_default() const {
+    return data == &emptyNode;
+}
+
 string_handle::string_handle(string_handle& other)
     : data(other.data) {
 #ifdef STRINGPOOL_REFCOUNT_ENABLE
@@ -70,6 +74,8 @@ void string_handle::refcount_inc(internal::node* data) {
 }
 
 void string_handle::refcount_increment() {
+    if (is_default())
+        return;
     refcount_inc(data);
     maybe_increment_children_refcounts(data);
 }
@@ -143,7 +149,7 @@ bool string_handle::refcount_dec_prefix(internal::node* data) {
 }
 
 void string_handle::refcount_decrement() {
-    if (!data || data == &emptyNode)
+    if (!data || is_default())
         return;
     refcount_dec(data);
 }
@@ -311,9 +317,7 @@ int string_handle::memcmp(const internal::node* leftNode, const char* rhs, size_
     size_t charsCompared = 0;
     size_t pieceLength = walker.get_next_bytes(&piece);
     size_t pieceIndex = 0;
-    size_t iterations = 0;
     while (charsCompared < length) {
-        ++iterations;
         if (pieceLength == 0) {
             std::string msg = "Length argument of ";
             msg += std::to_string(length);

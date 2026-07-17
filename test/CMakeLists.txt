@@ -25,7 +25,8 @@ add_executable(test-stringpool
         src/OperatorEqualsTest.cpp
         src/MapTests.cpp
         src/UnorderedMapTests.cpp
-        src/VariadicConcatTests.cpp)
+        src/VariadicConcatTests.cpp
+        DefaultStringTest.cpp)
 
 target_include_directories(test-stringpool PRIVATE src/include)
 

@@ -114,7 +114,7 @@ string_handle pool::intern(const char* string, size_t size)
     {
         readLock.unlock();
         std::lock_guard writeLock(tableRwMutex);
-        auto resultWithWrite = do_intern_unsafe(hash, string, size, true, result);
+        [[maybe_unused]] auto resultWithWrite = do_intern_unsafe(hash, string, size, true, result);
         assert(resultWithWrite == InternResult::Success);
         return result.make_strong();
     }
@@ -182,7 +182,7 @@ node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
     if (stringSize <= MAX_SHORT_ATOM_STRING_LENGTH)
     {
         auto* shortAtom = allocate_short_atom(stringSize, hash, this);
-        shortAtom->length = static_cast<char>(stringSize);
+        shortAtom->length = static_cast<unsigned char>(stringSize);
         std::memcpy(reinterpret_cast<char*>(shortAtom) + sizeof(*shortAtom), string, stringSize);
         assert(internal::get_length(shortAtom) == stringSize);
         assert(shortAtom->owner == this);
@@ -192,7 +192,7 @@ node* pool::add_atom_unsafe(const char* string, size_t stringSize, size_t hash)
     {
         abortIfStringTooLarge(stringSize);
         auto* atom = allocate_atom(stringSize, hash, this);
-        atom->length = stringSize;
+        atom->length = stringSize & 0x00ffffffffffffff;
         std::memcpy(reinterpret_cast<char*>(atom) + sizeof(atom_node), string, stringSize);
         assert(internal::get_length(atom) == stringSize);
         return atom;
@@ -229,7 +229,7 @@ weak_string_handle pool::add_concat_unsafe(size_t hash, string_handle left, stri
         // since if we could, we'd just make it an atom instead of a concat.
         abortIfStringTooLarge(totalLength);
         concat_node* concat = allocate_concat(hash, this);
-        concat->length = totalLength;
+        concat->length = totalLength & 0x00ffffffffffffff;
         concat->left = left.data;
         concat->right = right.data;
         auto r = table.emplace(hash, std::list<weak_string_handle>());
@@ -273,6 +273,20 @@ pool::InternResult pool::do_concat_unsafe(size_t hash, string_handle left, strin
 
 string_handle pool::concat(string_handle left, string_handle right)
 {
+    // Special cases to allow left or right to be default string handles.
+    // Such handles are not owned by any pool, but we allow them to be concated
+    // to a string that is, or to each other.
+    if (left.is_default()) {
+        if (right.is_default())
+            return intern("");
+        if (right.data->owner == this)
+            return right;
+    } else {
+        if (right.is_default())
+            if (left.data->owner == this)
+                return left;
+    }
+
     if (left.data->owner != this || right.data->owner != this)
         throw std::invalid_argument("Both strings for concatenation must belong to this pool instance");
     hasher h;
@@ -286,7 +300,7 @@ string_handle pool::concat(string_handle left, string_handle right)
     {
         readLock.unlock();
         std::lock_guard writeLock(tableRwMutex);
-        auto writeResult = do_concat_unsafe(hash, left, right, true, result);
+        [[maybe_unused]] auto writeResult = do_concat_unsafe(hash, left, right, true, result);
         assert(writeResult == InternResult::Success);
         return result.make_strong();
     }

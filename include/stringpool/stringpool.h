@@ -100,6 +100,8 @@ namespace stringpool {
 
         string_handle(internal::node* data);
 
+        [[nodiscard]] bool is_default() const;
+
         class tree_walker {
             // We assume this won't change during the lifetime of this object.
             // This is currently upheld by users of this class.

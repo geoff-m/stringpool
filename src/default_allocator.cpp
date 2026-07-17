@@ -16,5 +16,6 @@ char* default_allocator::allocate(size_t size, size_t alignment) {
 }
 
 void default_allocator::deallocate(char* ptr, size_t size) {
+    (void)size;
     std::free(ptr);
 }

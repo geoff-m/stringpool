@@ -45,6 +45,10 @@ PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/>
     $<INSTALL_INTERFACE:include/>
 )
 
+target_compile_options(stringpool PRIVATE
+        $<$<OR:$<CXX_COMPILER_ID:GNU>,$<CXX_COMPILER_ID:Clang>>:-Wall -Wextra -Wpedantic -Wconversion -Werror>
+)
+
 # This propagates C++ standard 20 (at least) to targets that link to this.
 target_compile_features(stringpool INTERFACE cxx_std_20)
 

@@ -40,13 +40,6 @@ TEST(Basic, DedupEmpty) {
     expectEqual(interned, string);
 }
 
-TEST(Basic, DefaultHandle) {
-    string_handle d;
-    pool p;
-    string_handle empty = p.intern("");
-    expectEqual(empty, d);
-}
-
 TEST(Basic, AtomLengths) {
     pool p;
     for (long length = 1; length < 1024 * 1024; length <<= 1) {
