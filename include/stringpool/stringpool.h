@@ -721,3 +721,12 @@ struct std::formatter<stringpool::string_handle> {
 [[nodiscard]] bool operator!=(const std::string_view& left, const stringpool::string_handle& right);
 
 [[nodiscard]] bool operator!=(const stringpool::string_handle& left, const std::string_view& right);
+
+template<class CharT, class Traits>
+std::basic_ostream<CharT, Traits>& operator<<(std::basic_ostream<CharT, Traits>& os,
+                                              const stringpool::string_handle& sh) {
+    for (auto it = sh.begin_chunk(); it != sh.end_chunk(); ++it) {
+        os << *it;
+    }
+    return os;
+}
