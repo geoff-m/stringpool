@@ -713,3 +713,11 @@ struct std::formatter<stringpool::string_handle> {
         return out;
     }
 };
+
+[[nodiscard]] bool operator==(const std::string_view& left, const stringpool::string_handle& right);
+
+[[nodiscard]] bool operator==(const stringpool::string_handle& left, const std::string_view& right);
+
+[[nodiscard]] bool operator!=(const std::string_view& left, const stringpool::string_handle& right);
+
+[[nodiscard]] bool operator!=(const stringpool::string_handle& left, const std::string_view& right);

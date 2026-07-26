@@ -39,6 +39,10 @@ void expectEqual(const string_handle& interned, const char* str) {
     EXPECT_TRUE(interned.equals(str));
     EXPECT_EQ(0, interned.strcmp(str));
     EXPECT_EQ(0, interned.memcmp(str, len));
+    EXPECT_TRUE(str == interned);
+    EXPECT_TRUE(interned == str);
+    EXPECT_FALSE(str != interned);
+    EXPECT_FALSE(interned != str);
 }
 
 void expectEqual(const string_handle& x, const string_handle& y) {
