@@ -56,9 +56,16 @@ void expectEqual(const string_handle& x, const string_handle& y) {
     EXPECT_EQ(0, y.strcmp(x));
     EXPECT_EQ(0, x.memcmp(y, x.size()));
     EXPECT_EQ(0, y.memcmp(x, y.size()));
+    EXPECT_EQ(x.length(), y.length());
+    EXPECT_EQ(x.size(), y.size());
+    EXPECT_EQ(x.empty(), y.empty());
 }
 
 void expectLength(size_t length, const string_handle& interned) {
     EXPECT_EQ(length, interned.size());
     EXPECT_EQ(length, interned.length());
+    if (length == 0)
+        EXPECT_TRUE(interned.empty());
+    else
+        EXPECT_FALSE(interned.empty());
 }

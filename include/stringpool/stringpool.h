@@ -319,6 +319,13 @@ namespace stringpool {
         [[nodiscard]] size_t length() const;
 
         /**
+         * Gets whether this string_handle represents the empty string
+         * (i.e. whether it has length 0).
+         * @return True if empty (length == 0), otherwise false (length > 0).
+         */
+        [[nodiscard]] bool empty() const;
+
+        /**
          * Copies this string.
          * @param destination The place to write the data of this string.
          * @param size The maximum number of bytes to write. Must not exceed the length of this string.

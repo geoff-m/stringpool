@@ -483,12 +483,15 @@ string_handle::chunk_iterator_backward string_handle::rend_chunk() const {
 }
 
 size_t string_handle::size() const {
-    const auto ret = get_length(data);
-    return ret;
+    return get_length(data);
 }
 
 size_t string_handle::length() const {
     return size();
+}
+
+bool string_handle::empty() const {
+    return size() == 0;
 }
 
 bool string_handle::operator<(const string_handle& other) const {
