@@ -2,9 +2,9 @@
 A string interning library with concatenation.
 
 ## Overview
-This library consists of two types: `stringpool` and `string_handle`.
+This library consists of two types: `pool` and `string_handle`.
 
-Instances of `stringpool` offer just one main function, `intern`,
+Instances of `pool` offer just one main function, `intern`,
 whose usage is simple.
 `intern` takes a string argument and returns a `string_handle`
 representing a cached version of the given string,
@@ -209,7 +209,7 @@ because the system almost certainly already pays a linear time cost (or more) to
 Although it may be wise to expect adopting string interning
 to slow down your application, it is not guaranteed.
 In fact, some applications may be *sped up* if they make frequent equality comparisons between strings.
-Since a stringpool::pool deduplicates strings, equality comparisons on pairs of string handles
+Since a pool deduplicates strings, equality comparisons on pairs of string handles
 reduce to simply comparing pointers, a fast constant-time operation.
 
 Another potential speed improvement comes from the fact that the string pool
